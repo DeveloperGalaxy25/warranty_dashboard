@@ -1,0 +1,136 @@
+import { useState } from "react";
+import { Calendar, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateRange } from "../WarrantyDashboard";
+import { cn } from "@/lib/utils";
+
+interface DateRangePickerProps {
+  value: DateRange;
+  onChange: (range: DateRange) => void;
+}
+
+const presetRanges = {
+  "today": () => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return { from: start, to: new Date() };
+  },
+  "yesterday": () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    return { from: start, to: end };
+  },
+  "7days": () => ({
+    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    to: new Date()
+  }),
+  "30days": () => ({
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    to: new Date()
+  }),
+  "90days": () => ({
+    from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+    to: new Date()
+  }),
+  "custom": () => null
+};
+
+export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState("30days");
+  const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
+
+  const handlePresetChange = (preset: string) => {
+    setSelectedPreset(preset);
+    if (preset !== "custom") {
+      const range = presetRanges[preset as keyof typeof presetRanges]();
+      if (range) {
+        onChange(range);
+        setIsOpen(false);
+      }
+    }
+  };
+
+  const handleCustomRangeSelect = (range: { from?: Date; to?: Date } | undefined) => {
+    if (range?.from && range?.to) {
+      setCustomRange(range as { from: Date; to: Date });
+      onChange({ from: range.from, to: range.to });
+      setIsOpen(false);
+    } else {
+      setCustomRange(range || {});
+    }
+  };
+
+  const formatDateRange = (range: DateRange) => {
+    const today = new Date();
+    const isToday = range.to.toDateString() === today.toDateString();
+    
+    if (isToday) {
+      const diffTime = Math.abs(today.getTime() - range.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) return "Today";
+      if (diffDays <= 7) return "Last 7 days";
+      if (diffDays <= 30) return "Last 30 days";
+      if (diffDays <= 90) return "Last 90 days";
+    }
+    
+    return `${range.from.toLocaleDateString()} - ${range.to.toLocaleDateString()}`;
+  };
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="flex items-center space-x-2 min-w-[200px] justify-between"
+        >
+          <div className="flex items-center space-x-2">
+            <Calendar className="h-4 w-4" />
+            <span>{formatDateRange(value)}</span>
+          </div>
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 bg-popover border border-border shadow-lg z-50" align="end">
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-2 block">Quick Select</label>
+            <Select value={selectedPreset} onValueChange={handlePresetChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="7days">Last 7 days</SelectItem>
+                <SelectItem value="30days">Last 30 days</SelectItem>
+                <SelectItem value="90days">Last 90 days</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {selectedPreset === "custom" && (
+            <div>
+              <label className="text-sm font-medium mb-2 block">Custom Date Range</label>
+              <CalendarComponent
+                mode="range"
+                selected={customRange.from && customRange.to ? { from: customRange.from, to: customRange.to } : undefined}
+                onSelect={handleCustomRangeSelect}
+                numberOfMonths={2}
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
