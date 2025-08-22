@@ -1,195 +1,189 @@
-import { useState } from "react";
-import { Calendar, Search, Download, Send, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import React, { useMemo, useState } from "react";
 import { KPICards } from "./dashboard/KPICards";
+import { DateRangePicker } from "./dashboard/DateRangePicker";
 import { CustomerTable } from "./dashboard/CustomerTable";
 import { StatusUpdateModal } from "./dashboard/StatusUpdateModal";
-import { DateRangePicker } from "./dashboard/DateRangePicker";
-import { useToast } from "@/hooks/use-toast";
+import { useWarrantyData, type WarrantyRecord } from "@/hooks/useWarrantyData";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+export type DateRange = { from: Date; to: Date };
+
+// Customer shape consumed by dashboard subcomponents.
+// Includes both lower-case and UpperCase keys to be compatible with
+// components that were authored with different naming conventions.
 export interface Customer {
-  warrantyId: string;
-  timestamp: string;
-  brand: "Baybee" | "Drogo" | "Domestica";
-  customerName: string;
-  email: string;
-  phone: string;
-  product: string;
-  status: "New" | "Card Sent" | "In Outreach" | "Review Won" | "Escalated" | "Closed";
-  lastRemark: string;
-  nextFollowUp: string | null;
-  assignedAgent: string;
-  warrantyCardUrl: string;
+  id: string;
+  WarrantyID: string;
+  Timestamp: string | number | Date;
+  timestamp?: string | number | Date;
+  Brand: string;
+  brand?: string;
+  CustomerName: string;
+  Email: string;
+  Mobile: string;
+  Product: string;
+  Status: string;
+  status?: string;
+  LastRemark: string;
+  NextFollowUp?: string | number | Date;
+  AssignedTo?: string;
+  PurchasedFrom?: string;
+  purchasedFrom?: string;
 }
 
-export interface DateRange {
-  from: Date;
-  to: Date;
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  // Firestore Timestamp compatibility
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in (value as Record<string, unknown>) &&
+    typeof (value as any).toDate === "function"
+  ) {
+    const d = (value as any).toDate();
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
-// Mock data for demo
-const generateMockData = (): Customer[] => {
-  const brands = ["Baybee", "Drogo", "Domestica"] as const;
-  const statuses = ["New", "Card Sent", "In Outreach", "Review Won", "Escalated", "Closed"] as const;
-  const agents = ["Sarah Chen", "Mike Rodriguez", "Emma Watson", "David Kim"];
-  const products = ["Baby Stroller XL", "Pet Carrier Pro", "Kitchen Blender", "Smart Vacuum", "Wireless Headphones"];
-  
-  return Array.from({ length: 50 }, (_, i) => ({
-    warrantyId: `WTY-${String(i + 1).padStart(4, '0')}`,
-    timestamp: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-    brand: brands[Math.floor(Math.random() * brands.length)],
-    customerName: `Customer ${i + 1}`,
-    email: `customer${i + 1}@example.com`,
-    phone: `+1-555-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-    product: products[Math.floor(Math.random() * products.length)],
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    lastRemark: `Last interaction on ${new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}`,
-    nextFollowUp: Math.random() > 0.5 ? new Date(Date.now() + Math.random() * 14 * 24 * 60 * 60 * 1000).toISOString() : null,
-    assignedAgent: agents[Math.floor(Math.random() * agents.length)],
-    warrantyCardUrl: `https://example.com/warranty/${i + 1}.pdf`
-  }));
+const defaultRange: DateRange = {
+  // default to last ~2 years so older rows (e.g., 2024) appear immediately
+  from: new Date(Date.now() - 730 * 24 * 60 * 60 * 1000),
+  to: new Date(),
 };
 
-export const WarrantyDashboard = () => {
-  const [customers] = useState<Customer[]>(generateMockData());
-  const [selectedBrand, setSelectedBrand] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    to: new Date()
-  });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const { toast } = useToast();
+const WarrantyDashboard: React.FC = () => {
+  const [range, setRange] = useState<DateRange>(defaultRange);
+  const [selected, setSelected] = useState<WarrantyRecord | null>(null);
+  const [brand, setBrand] = useState<string>("All");
+  const [refreshVersion, setRefreshVersion] = useState<number>(0);
 
-  // Filter customers based on current filters
-  const filteredCustomers = customers.filter(customer => {
-    const matchesBrand = selectedBrand === "all" || customer.brand === selectedBrand;
-    const customerDate = new Date(customer.timestamp);
-    const matchesDateRange = customerDate >= dateRange.from && customerDate <= dateRange.to;
-    const matchesSearch = searchQuery === "" || 
-      customer.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.warrantyId.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    return matchesBrand && matchesDateRange && matchesSearch;
-  });
+  const { data, loading, error } = useWarrantyData({
+    brand: brand === "All" ? undefined : brand,
+    startDate: range.from.toISOString(),
+    endDate: range.to.toISOString(),
+    // include refreshVersion so refetch occurs after save
+    // (the hook stringifies filters; adding this will change the key)
+    // @ts-ignore
+    refreshVersion,
+  } as any);
 
-  const handleCustomerClick = (customer: Customer) => {
-    setSelectedCustomer(customer);
-  };
-
-  const handleStatusUpdate = (updatedCustomer: Customer) => {
-    // In a real app, this would update the backend
-    setSelectedCustomer(null);
-    toast({
-      title: "Status Updated",
-      description: `Customer ${updatedCustomer.warrantyId} has been updated successfully.`,
+  const customers: Customer[] = useMemo(() => {
+    return (data || []).map((w) => {
+      const ts = w.timestamp || (w as any).Timestamp;
+      const nf = w.nextFollowUp || (w as any).NextFollowUp;
+      const tsDate = toDate(ts);
+      const nfDate = toDate(nf);
+      return {
+        id: w.id,
+        WarrantyID: w.warrantyId || (w as any).WarrantyID || w.id,
+        Timestamp: tsDate ? tsDate.toISOString() : "",
+        timestamp: tsDate ? tsDate.toISOString() : "",
+        Brand: w.brand || (w as any).Brand || "",
+        brand: w.brand || "",
+        CustomerName: w.customerName || (w as any).CustomerName || "",
+        Email: w.email || (w as any).Email || "",
+        Mobile: w.phone || (w as any).Mobile || "",
+        Product: w.product || (w as any).Product || "",
+        Status: w.status || (w as any).Status || "",
+        status: w.status || "",
+        LastRemark: w.lastRemark || (w as any).LastRemark || "",
+        NextFollowUp: nfDate ? nfDate.toISOString() : "",
+        AssignedTo: w.assignedAgent || (w as any).AssignedTo || "",
+        PurchasedFrom: w.purchasedFrom || (w as any).PurchasedFrom || "",
+        purchasedFrom: w.purchasedFrom || (w as any).PurchasedFrom || "",
+      } as Customer;
     });
-  };
+  }, [data]);
 
-  const handleExport = () => {
-    toast({
-      title: "Export Started",
-      description: "Your CSV export is being prepared and will download shortly.",
+  const dateFilteredCustomers = useMemo(() => {
+    return customers.filter((c) => {
+      const d = toDate(c.Timestamp) || toDate(c.timestamp);
+      if (!d) return true;
+      return d >= range.from && d <= range.to;
     });
-  };
+  }, [customers, range]);
 
-  const handleSendReport = () => {
-    toast({
-      title: "Report Sent",
-      description: "The 7-day summary report has been sent to the support manager.",
+  const brandOptions = useMemo(() => {
+    const set = new Set<string>();
+    (data || []).forEach((w) => { 
+      const brand = w.brand || (w as any).Brand;
+      if (brand) set.add(brand); 
     });
-  };
+    return Array.from(set).sort();
+  }, [data]);
+
+  const filteredCustomers = useMemo(() => {
+    if (brand === "All") return dateFilteredCustomers;
+    return dateFilteredCustomers.filter((c) => c.Brand === brand);
+  }, [dateFilteredCustomers, brand]);
+
+  if (loading) return <p className="p-6">Loading warranties...</p>;
+  if (error) return <p className="p-6 text-red-500">Error: {error}</p>;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top Navigation Bar */}
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Left: Logo/Title */}
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-foreground">Warranty Dashboard</h1>
-            </div>
-
-            {/* Center: Brand Filter */}
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select value={selectedBrand} onValueChange={setSelectedBrand}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="All Brands" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border shadow-lg z-50">
-                    <SelectItem value="all">All Brands</SelectItem>
-                    <SelectItem value="Baybee">Baybee</SelectItem>
-                    <SelectItem value="Drogo">Drogo</SelectItem>
-                    <SelectItem value="Domestica">Domestica</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Right: Date Range, Search, Actions */}
-            <div className="flex items-center space-x-4">
-              <DateRangePicker value={dateRange} onChange={setDateRange} />
-              
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search customers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 w-64"
-                />
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExport}
-                className="flex items-center space-x-2"
-              >
-                <Download className="h-4 w-4" />
-                <span>Export</span>
-              </Button>
-
-              <Button
-                size="sm"
-                onClick={handleSendReport}
-                className="flex items-center space-x-2 bg-primary hover:bg-primary-hover text-primary-foreground"
-              >
-                <Send className="h-4 w-4" />
-                <span>Send 7-Day Report</span>
-              </Button>
-            </div>
-          </div>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <Select value={brand} onValueChange={setBrand}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Brand" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Brands</SelectItem>
+              {brandOptions.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DateRangePicker value={range} onChange={setRange} />
         </div>
-      </header>
+      </div>
 
-      {/* Main Content */}
-      <main className="px-6 py-6 space-y-6">
-        {/* KPI Cards */}
-        <KPICards customers={filteredCustomers} />
+      <KPICards customers={filteredCustomers as any} />
 
-        {/* Customer Table */}
-        <CustomerTable 
-          customers={filteredCustomers} 
-          onCustomerClick={handleCustomerClick}
-        />
-      </main>
+      <CustomerTable
+        customers={filteredCustomers as any}
+        onCustomerClick={(c) => {
+          const raw = data.find((w) => w.id === c.id || w.warrantyId === (c as any).WarrantyID);
+          if (!raw) return;
+          const normalized: WarrantyRecord = {
+            id: raw.id,
+            warrantyId: (raw as any).warrantyId ?? (raw as any).WarrantyID ?? raw.id,
+            timestamp: toDate((raw as any).timestamp ?? (raw as any).Timestamp)?.toISOString() ?? "",
+            brand: (raw as any).brand ?? (raw as any).Brand ?? "",
+            customerName: (raw as any).customerName ?? (raw as any).CustomerName ?? "",
+            email: (raw as any).email ?? (raw as any).Email ?? "",
+            phone: (raw as any).phone ?? (raw as any).Mobile ?? "",
+            orderId: (raw as any).orderId ?? (raw as any).OrderId ?? "",
+            product: (raw as any).product ?? (raw as any).Product ?? "",
+            purchasedFrom: (raw as any).purchasedFrom ?? (raw as any).PurchasedFrom ?? "",
+            status: (raw as any).status ?? (raw as any).Status ?? "",
+            lastRemark: (raw as any).lastRemark ?? (raw as any).LastRemark ?? "",
+            nextFollowUp: toDate((raw as any).nextFollowUp ?? (raw as any).NextFollowUp)?.toISOString() ?? "",
+            assignedAgent: (raw as any).assignedAgent ?? (raw as any).AssignedTo ?? "",
+            lastUpdatedOn: (raw as any).lastUpdatedOn ?? (raw as any).LastUpdatedOn ?? "",
+            warrantyCardUrl: (raw as any).warrantyCardUrl ?? (raw as any).WarrantyCardUrl ?? "",
+            sourceKey: (raw as any).sourceKey ?? (raw as any).SourceKey ?? "",
+          };
+          setSelected(normalized);
+        }}
+      />
 
-      {/* Status Update Modal */}
-      {selectedCustomer && (
+      {selected && (
         <StatusUpdateModal
-          customer={selectedCustomer}
-          isOpen={!!selectedCustomer}
-          onClose={() => setSelectedCustomer(null)}
-          onUpdate={handleStatusUpdate}
+          customer={selected}
+          isOpen={Boolean(selected)}
+          onClose={() => setSelected(null)}
+          onUpdate={() => setRefreshVersion((v) => v + 1)}
         />
       )}
     </div>
   );
 };
+
+export default WarrantyDashboard;

@@ -1,4 +1,4 @@
-import { WarrantyDashboard } from "@/components/WarrantyDashboard";
+import WarrantyDashboard from "@/components/WarrantyDashboard";
 
 const Index = () => {
   return <WarrantyDashboard />;
