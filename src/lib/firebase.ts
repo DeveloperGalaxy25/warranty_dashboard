@@ -26,7 +26,7 @@ const fallbackConfig = {
 const firebaseConfig = hasAllEnvValues ? envConfig : fallbackConfig;
 
 if (!hasAllEnvValues) {
-  // eslint-disable-next-line no-console
+   
   console.warn(
     "Using fallback Firebase config because VITE_FIREBASE_* env vars are missing."
   );

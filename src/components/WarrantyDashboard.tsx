@@ -29,6 +29,10 @@ export interface Customer {
   AssignedTo?: string;
   PurchasedFrom?: string;
   purchasedFrom?: string;
+  WarrantyCardSent?: boolean;
+  FeedbackReceived?: boolean;
+  ExtendedWarrantySent?: boolean;
+  FollowUpStatus?: 'Pending' | 'Completed' | 'Overdue';
 }
 
 function toDate(value: unknown): Date | null {
@@ -62,6 +66,10 @@ const WarrantyDashboard: React.FC = () => {
   const [selected, setSelected] = useState<WarrantyRecord | null>(null);
   const [brand, setBrand] = useState<string>("All");
   const [refreshVersion, setRefreshVersion] = useState<number>(0);
+  const [searchId, setSearchId] = useState<string>("");
+  const [activeWarrantyFilter, setActiveWarrantyFilter] = useState<string>("");
+  const [showReviewPendingOnly, setShowReviewPendingOnly] = useState<boolean>(false);
+  const [showTodayDueOnly, setShowTodayDueOnly] = useState<boolean>(false);
 
   const { data, loading, error } = useWarrantyData({
     brand: brand === "All" ? undefined : brand,
@@ -90,9 +98,10 @@ const WarrantyDashboard: React.FC = () => {
         Email: w.email || (w as any).Email || "",
         Mobile: w.phone || (w as any).Mobile || "",
         Product: w.product || (w as any).Product || "",
-        Status: w.status || (w as any).Status || "",
-        status: w.status || "",
-        LastRemark: w.lastRemark || (w as any).LastRemark || "",
+        WarrantyCardSent: (w as any).warrantyCardSent ?? (w as any).WarrantyCardSent ?? false,
+        FeedbackReceived: (w as any).feedbackReceived ?? (w as any).FeedbackReceived ?? false,
+        ExtendedWarrantySent: (w as any).extendedWarrantySent ?? (w as any).ExtendedWarrantySent ?? false,
+        FollowUpStatus: (w as any).followUpStatus ?? (w as any).FollowUpStatus ?? 'Pending',
         NextFollowUp: nfDate ? nfDate.toISOString() : "",
         AssignedTo: w.assignedAgent || (w as any).AssignedTo || "",
         PurchasedFrom: w.purchasedFrom || (w as any).PurchasedFrom || "",
@@ -109,19 +118,39 @@ const WarrantyDashboard: React.FC = () => {
     });
   }, [customers, range]);
 
+  // Keep the brand list static so options are always visible regardless of filters/date range
   const brandOptions = useMemo(() => {
-    const set = new Set<string>();
-    (data || []).forEach((w) => { 
-      const brand = w.brand || (w as any).Brand;
-      if (brand) set.add(brand); 
-    });
-    return Array.from(set).sort();
-  }, [data]);
+    return ["Baybee", "Drogo", "Domestica"];
+  }, []);
 
   const filteredCustomers = useMemo(() => {
     if (brand === "All") return dateFilteredCustomers;
     return dateFilteredCustomers.filter((c) => c.Brand === brand);
   }, [dateFilteredCustomers, brand]);
+
+  // Apply search filter (by exact Warranty ID) to the already brand/date filtered list
+  const searchFilteredCustomers = useMemo(() => {
+    if (!activeWarrantyFilter.trim()) return filteredCustomers;
+    return filteredCustomers.filter((c) => c.WarrantyID === activeWarrantyFilter.trim());
+  }, [filteredCustomers, activeWarrantyFilter]);
+
+  // Apply today's due filter
+  const todayDueFilteredCustomers = useMemo(() => {
+    if (!showTodayDueOnly) return searchFilteredCustomers;
+    
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    return searchFilteredCustomers.filter(customer => {
+      if (customer.FeedbackReceived) return false; // Skip completed ones
+      if (!customer.NextFollowUp) return false;
+      
+      const nextFollowUpDate = new Date(customer.NextFollowUp);
+      const nextFollowUpStart = new Date(nextFollowUpDate.getFullYear(), nextFollowUpDate.getMonth(), nextFollowUpDate.getDate());
+      
+      return nextFollowUpStart.getTime() === todayStart.getTime();
+    });
+  }, [searchFilteredCustomers, showTodayDueOnly]);
 
   if (loading) return <p className="p-6">Loading warranties...</p>;
   if (error) return <p className="p-6 text-red-500">Error: {error}</p>;
@@ -131,7 +160,7 @@ const WarrantyDashboard: React.FC = () => {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
         <div className="flex items-center gap-3">
-          <Select value={brand} onValueChange={setBrand}>
+          <Select value={brand} onValueChange={(v) => { setBrand(v); setShowReviewPendingOnly(false); setShowTodayDueOnly(false); }}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Brand" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="All">All Brands</SelectItem>
@@ -141,13 +170,63 @@ const WarrantyDashboard: React.FC = () => {
             </SelectContent>
           </Select>
           <DateRangePicker value={range} onChange={setRange} />
+          {/* Search by Warranty ID (filters table; no new page or modal) */}
+          <div className="flex items-center gap-2">
+            <input
+              className="border border-border rounded-md px-3 py-2 w-[220px] bg-background text-foreground"
+              placeholder="Search Warranty ID"
+              value={searchId}
+              onChange={(e) => setSearchId(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setShowReviewPendingOnly(false);
+                  setShowTodayDueOnly(false);
+                  const v = searchId.trim();
+                  setActiveWarrantyFilter(v);
+                }
+              }}
+            />
+            <button
+              className="border border-border rounded-md px-3 py-2 bg-primary text-primary-foreground"
+              onClick={() => {
+                setShowReviewPendingOnly(false);
+                setShowTodayDueOnly(false);
+                setActiveWarrantyFilter(searchId.trim());
+              }}
+            >Search</button>
+          </div>
         </div>
       </div>
 
-      <KPICards customers={filteredCustomers as any} />
+      <KPICards 
+        customers={todayDueFilteredCustomers as any}
+        onReviewPendingClick={() => {
+          // Apply filter: WarrantyCardSent=true AND FeedbackReceived=false
+          setActiveWarrantyFilter("");
+          setSearchId("");
+          setShowReviewPendingOnly(true);
+          setShowTodayDueOnly(false);
+        }}
+        onTotalClick={() => {
+          // Clear all ad-hoc filters and show full dataset under current brand/date
+          setShowReviewPendingOnly(false);
+          setShowTodayDueOnly(false);
+          setActiveWarrantyFilter("");
+          setSearchId("");
+        }}
+        onTodayDueClick={() => {
+          // Apply filter: Show only today's follow-ups due
+          setActiveWarrantyFilter("");
+          setSearchId("");
+          setShowReviewPendingOnly(false);
+          setShowTodayDueOnly(true);
+        }}
+      />
 
       <CustomerTable
-        customers={filteredCustomers as any}
+        customers={(todayDueFilteredCustomers as any).filter((c: any) => (
+          showReviewPendingOnly ? (Boolean(c.WarrantyCardSent) && !c.FeedbackReceived) : true
+        ))}
         onCustomerClick={(c) => {
           const raw = data.find((w) => w.id === c.id || w.warrantyId === (c as any).WarrantyID);
           if (!raw) return;
