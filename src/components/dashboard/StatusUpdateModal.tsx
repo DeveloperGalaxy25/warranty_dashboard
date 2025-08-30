@@ -3,12 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Check, Clock, User } from "lucide-react";
+import { Check, Clock, User } from "lucide-react";
 import { format } from "date-fns";
 import { WarrantyRecord } from "@/hooks/useWarrantyData";
-import { markReviewDone, logFollowUpAction, getWorkflowHistory } from "@/lib/warrantyService";
+import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus } from "@/lib/warrantyService";
 import { cn } from "@/lib/utils";
 
 interface StatusUpdateModalProps {
@@ -29,15 +27,11 @@ interface FollowUpSummary {
 // Follow-up data interface
 interface FollowUpData {
   followUp1Done: boolean;
-  followUp1Date: string;
   followUp1Remark: string;
   followUp2Done: boolean;
-  followUp2Date: string;
   followUp2Remark: string;
   followUp3Done: boolean;
-  followUp3Date: string;
   followUp3Remark: string;
-  nextFollowUpDue: string;
 }
 
 // Follow-up history interface
@@ -56,15 +50,11 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
   const [remark, setRemark] = useState("");
   const [followUpData, setFollowUpData] = useState<FollowUpData>({
     followUp1Done: false,
-    followUp1Date: "",
     followUp1Remark: "",
     followUp2Done: false,
-    followUp2Date: "",
     followUp2Remark: "",
     followUp3Done: false,
-    followUp3Date: "",
-    followUp3Remark: "",
-    nextFollowUpDue: ""
+    followUp3Remark: ""
   });
   const [loading, setLoading] = useState(false);
   const [followUpSummary, setFollowUpSummary] = useState<FollowUpSummary | null>(null);
@@ -73,14 +63,6 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const isReviewCompleted = Boolean(customer?.status === "Review Won" || customer?.status === "Closed" || customer?.status === "Completed");
-
-  const addDays = (iso: string, n: number): string => {
-    // Parse yyyy-MM-dd in local time to avoid TZ shifts
-    const [y, m, d] = iso.split('-').map(Number);
-    const dt = new Date(y || 1970, (m || 1) - 1, d || 1);
-    dt.setDate(dt.getDate() + n);
-    return format(dt, 'yyyy-MM-dd');
-  };
 
   // Load follow-up history when modal opens
   useEffect(() => {
@@ -106,18 +88,6 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
     }
   };
 
-  useEffect(() => {
-    if (followUpData.followUp1Date && !followUpData.followUp2Date) {
-      setFollowUpData(prev => ({ ...prev, followUp2Date: addDays(prev.followUp1Date, 3) }));
-    }
-  }, [followUpData.followUp1Date]);
-
-  useEffect(() => {
-    if (followUpData.followUp2Date && !followUpData.followUp3Date) {
-      setFollowUpData(prev => ({ ...prev, followUp3Date: addDays(prev.followUp2Date, 3) }));
-    }
-  }, [followUpData.followUp2Date]);
-
   const handleSave = async () => {
     try {
       setLoading(true);
@@ -125,62 +95,57 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
         await markReviewDone(customer.warrantyId, remark);
         setFollowUpSummary({ count: 3, stages: [1,2,3], latest: new Date().toISOString().slice(0,10), nextDue: null });
       } else {
-        const ops: Promise<any>[] = [];
+        // Handle follow-up updates with automatic timestamp detection
         if (followUpData.followUp1Done && !followUpSummary?.stages.includes(1)) {
-          if (!followUpData.followUp1Date) throw new Error("Select Follow-up 1 date");
-          ops.push(logFollowUpAction(
-            customer.warrantyId,
-            customer.customerName,
-            customer.brand,
-            1,
-            followUpData.followUp1Date,
-            followUpData.followUp2Date || null,
-            "Follow-up 1 Done",
-            followUpData.followUp1Remark || ""
-          ));
-        }
-        if (followUpData.followUp2Done && !followUpSummary?.stages.includes(2)) {
-          ops.push(logFollowUpAction(
+          // When Follow-up 1 is checked, automatically detect timestamp and calculate other dates
+          await updateFollowUpStatus({
+            warrantyId: customer.warrantyId,
+            followUp1Done: true,
+            followUp1Remark: followUpData.followUp1Remark,
+            followUp2Remark: followUpData.followUp2Remark,
+            followUp3Remark: followUpData.followUp3Remark
+          });
+        } else if (followUpData.followUp2Done && !followUpSummary?.stages.includes(2)) {
+          // Handle Follow-up 2 completion
+          await logFollowUpAction(
             customer.warrantyId,
             customer.customerName,
             customer.brand,
             2,
-            followUpData.followUp2Date || new Date().toISOString().slice(0,10),
-            followUpData.followUp3Date || null,
+            new Date().toISOString().slice(0,10),
+            null,
             "Follow-up 2 Done",
             followUpData.followUp2Remark || ""
-          ));
-        }
-        if (followUpData.followUp3Done && !followUpSummary?.stages.includes(3)) {
-          ops.push(logFollowUpAction(
+          );
+        } else if (followUpData.followUp3Done && !followUpSummary?.stages.includes(3)) {
+          // Handle Follow-up 3 completion
+          await logFollowUpAction(
             customer.warrantyId,
             customer.customerName,
             customer.brand,
             3,
-            followUpData.followUp3Date || new Date().toISOString().slice(0,10),
+            new Date().toISOString().slice(0,10),
             null,
             "Follow-up 3 Done",
             followUpData.followUp3Remark || ""
-          ));
-        }
-        if (ops.length === 0 && !followUpData.followUp1Remark && !followUpData.followUp2Remark && !followUpData.followUp3Remark) {
-          throw new Error("No changes to save");
-        }
-        if (ops.length === 0 && (followUpData.followUp1Remark || followUpData.followUp2Remark || followUpData.followUp3Remark)) {
+          );
+        } else if (followUpData.followUp1Remark || followUpData.followUp2Remark || followUpData.followUp3Remark) {
+          // Handle remarks only (no follow-up completion)
           const nextNo = (followUpSummary?.count || 0) + 1;
           const remark = followUpData.followUp1Remark || followUpData.followUp2Remark || followUpData.followUp3Remark;
-          ops.push(logFollowUpAction(
+          await logFollowUpAction(
             customer.warrantyId,
             customer.customerName,
             customer.brand,
             nextNo,
             new Date().toISOString().slice(0,10),
-            followUpData.nextFollowUpDue || null,
+            null,
             "Follow-up Note",
             remark
-          ));
+          );
+        } else {
+          throw new Error("No changes to save");
         }
-        await Promise.all(ops);
       }
       onUpdate();
       onClose();
@@ -196,15 +161,6 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
   const handleFollowUpToggle = (n: 1|2|3, checked: boolean) => {
     const map: Record<number, keyof FollowUpData> = {1: "followUp1Done", 2: "followUp2Done", 3: "followUp3Done"};
     setFollowUpData(prev => ({ ...prev, [map[n]]: checked } as FollowUpData));
-  };
-
-  const handleDateChange = (n: 1|2|3, date?: Date) => {
-    if (!date) return;
-    // Format in local time to yyyy-MM-dd (prevents off-by-one)
-    const iso = format(date, 'yyyy-MM-dd');
-    if (n === 1) setFollowUpData(prev => ({ ...prev, followUp1Date: iso }));
-    if (n === 2) setFollowUpData(prev => ({ ...prev, followUp2Date: iso }));
-    if (n === 3) setFollowUpData(prev => ({ ...prev, followUp3Date: iso }));
   };
 
   const handleRemarkChange = (n: 1|2|3, value: string) => {
@@ -305,6 +261,10 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
           {!(isReviewCompleted || reviewDone) && (
             <div className="space-y-4 p-4 border rounded-lg">
               <h3 className="text-lg font-medium">Follow-up Tracking</h3>
+              <p className="text-sm text-muted-foreground">
+                When you check "Follow-up 1 Done", the system will automatically detect the current timestamp 
+                and calculate the next follow-up dates.
+              </p>
 
               {/* F1 */}
               <div className="space-y-3 p-3 border rounded">
@@ -317,30 +277,9 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     className="h-4 w-4"
                   />
                   <Label htmlFor="f1">Follow-up 1 Done</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-[200px] justify-start", !followUpData.followUp1Date && "text-muted-foreground")}
-                        disabled={!followUpData.followUp1Done}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {followUpData.followUp1Date ? format(new Date(followUpData.followUp1Date), 'PPP') : "Pick date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={followUpData.followUp1Date ? new Date(followUpData.followUp1Date) : undefined}
-                        onSelect={(date) => {
-                          console.log('Date selected for F1:', date);
-                          handleDateChange(1, date);
-                        }}
-                        disabled={(date) => date > new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    Auto timestamp
+                  </span>
                 </div>
                 <div>
                   <Label htmlFor="f1Remark" className="text-sm font-medium">F1 Remark</Label>
@@ -366,30 +305,9 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     className="h-4 w-4"
                   />
                   <Label htmlFor="f2">Follow-up 2 Done</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        className={cn("w-[200px] justify-start", !followUpData.followUp2Date && "text-muted-foreground")}
-                        disabled={!followUpData.followUp1Done}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {followUpData.followUp2Date ? format(new Date(followUpData.followUp2Date), 'PPP') : "Auto"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={followUpData.followUp2Date ? new Date(followUpData.followUp2Date) : undefined}
-                        onSelect={(date) => {
-                          console.log('Date selected for F2:', date);
-                          handleDateChange(2, date);
-                        }}
-                        disabled={(date) => date > new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                    Auto calculated
+                  </span>
                 </div>
                 <div>
                   <Label htmlFor="f2Remark" className="text-sm font-medium">F2 Remark</Label>
@@ -415,30 +333,9 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     className="h-4 w-4"
                   />
                   <Label htmlFor="f3">Follow-up 3 Done</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        className={cn("w-[200px] justify-start", !followUpData.followUp3Date && "text-muted-foreground")}
-                        disabled={!followUpData.followUp2Done}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {followUpData.followUp3Date ? format(new Date(followUpData.followUp3Date), 'PPP') : "Auto"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={followUpData.followUp3Date ? new Date(followUpData.followUp3Date) : undefined}
-                        onSelect={(date) => {
-                          console.log('Date selected for F3:', date);
-                          handleDateChange(3, date);
-                        }}
-                        disabled={(date) => date > new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                    Auto calculated
+                  </span>
                 </div>
                 <div>
                   <Label htmlFor="f3Remark" className="text-sm font-medium">F3 Remark</Label>

@@ -195,3 +195,33 @@ export const getFollowupSummary = async (warrantyId: string): Promise<FollowUpSu
   const map = await getFollowupSummaryBatch([warrantyId]);
   return map[warrantyId] || { count: 0, stages: [], latest: null, nextDue: null };
 };
+
+// New function: Update follow-up status with automatic timestamp detection
+export const updateFollowUpStatus = async (
+  data: {
+    warrantyId: string;
+    followUp1Done: boolean;
+    followUp1Remark?: string;
+    followUp2Remark?: string;
+    followUp3Remark?: string;
+  }
+): Promise<{ success: boolean }> => {
+  const body = new URLSearchParams();
+  body.append("token", TOKEN);
+  body.append("action", "updateFollowUpStatus");
+  body.append("warrantyId", data.warrantyId);
+  body.append("followUp1Done", String(data.followUp1Done));
+  if (data.followUp1Remark) body.append("followUp1Remark", data.followUp1Remark);
+  if (data.followUp2Remark) body.append("followUp2Remark", data.followUp2Remark);
+  if (data.followUp3Remark) body.append("followUp3Remark", data.followUp3Remark);
+
+  const res = await fetch(BASE, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body,
+  });
+  if (!res.ok) throw new Error(`Failed to update follow-up status: ${res.status}`);
+  const json = await res.json();
+  if (!json?.success) throw new Error(json?.error || "Unknown API error");
+  return { success: true };
+};
