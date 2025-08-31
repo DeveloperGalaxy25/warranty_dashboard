@@ -218,6 +218,16 @@ const FollowUpsDoneCell = ({
     );
   }
 
+  // Use the followupsDone field from backend response
+  if (customer.FollowupsDone !== undefined) {
+    return (
+      <td className="px-4 py-3 text-sm text-foreground">
+        {customer.FollowupsDone} of 3
+      </td>
+    );
+  }
+
+  // Fallback to summary if followupsDone is not available
   if (summary) {
     return (
       <td className="px-4 py-3 text-sm text-foreground">
@@ -400,16 +410,15 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
       
       // Filter by Follow-ups Done
       if (columnFilters.FollowUpsDone !== 'All') {
-        const summary = summaries[customer.WarrantyID];
         if (customer.FeedbackReceived) {
           if (columnFilters.FollowUpsDone !== 'Completed') return false;
-        } else if (summary) {
-          const count = summary.count;
+        } else {
+          const count = customer.FollowupsDone ?? summaries[customer.WarrantyID]?.count ?? 0;
           if (columnFilters.FollowUpsDone === '0' && count !== 0) return false;
           if (columnFilters.FollowUpsDone === '1' && count !== 1) return false;
           if (columnFilters.FollowUpsDone === '2' && count !== 2) return false;
           if (columnFilters.FollowUpsDone === '3' && count !== 3) return false;
-        } else if (columnFilters.FollowUpsDone !== '0') return false;
+        }
       }
       
       return true;
@@ -431,10 +440,8 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
       if (a.FeedbackReceived) return 1;
       if (b.FeedbackReceived) return -1;
       
-      const aSummary = summaries[a.WarrantyID];
-      const bSummary = summaries[b.WarrantyID];
-      const aCount = aSummary?.count || 0;
-      const bCount = bSummary?.count || 0;
+      const aCount = a.FollowupsDone ?? summaries[a.WarrantyID]?.count ?? 0;
+      const bCount = b.FollowupsDone ?? summaries[b.WarrantyID]?.count ?? 0;
       
       if (aCount !== bCount) return sortDirection === 'asc' ? aCount - bCount : bCount - aCount;
       return 0;
@@ -711,7 +718,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
                   <SelectContent>
                     <SelectItem value="All">All</SelectItem>
                     <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="Yes">No</SelectItem>
+                    <SelectItem value="No">No</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

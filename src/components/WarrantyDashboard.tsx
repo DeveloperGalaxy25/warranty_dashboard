@@ -33,6 +33,7 @@ export interface Customer {
   FeedbackReceived?: boolean;
   ExtendedWarrantySent?: boolean;
   FollowUpStatus?: 'Pending' | 'Completed' | 'Overdue';
+  FollowupsDone?: number;
 }
 
 function toDate(value: unknown): Date | null {
@@ -102,6 +103,7 @@ const WarrantyDashboard: React.FC = () => {
         FeedbackReceived: (w as any).feedbackReceived ?? (w as any).FeedbackReceived ?? false,
         ExtendedWarrantySent: (w as any).extendedWarrantySent ?? (w as any).ExtendedWarrantySent ?? false,
         FollowUpStatus: (w as any).followUpStatus ?? (w as any).FollowUpStatus ?? 'Pending',
+        FollowupsDone: (w as any).followupsDone ?? (w as any).FollowupsDone ?? 0,
         NextFollowUp: nfDate ? nfDate.toISOString() : "",
         AssignedTo: w.assignedAgent || (w as any).AssignedTo || "",
         PurchasedFrom: w.purchasedFrom || (w as any).PurchasedFrom || "",

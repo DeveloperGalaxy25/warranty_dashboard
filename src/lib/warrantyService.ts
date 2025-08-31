@@ -128,6 +128,7 @@ export const markReviewDone = async (
   body.append("action", "updateReviewAndTriggerCard");
   body.append("warrantyId", warrantyId);
   body.append("reviewDone", "true");
+  body.append("extendedWarrantySent", "true");
   if (reviewRemark) body.append("remarks", reviewRemark);
   body.append("updatedBy", updatedBy);
 
@@ -200,20 +201,21 @@ export const getFollowupSummary = async (warrantyId: string): Promise<FollowUpSu
 export const updateFollowUpStatus = async (
   data: {
     warrantyId: string;
-    followUp1Done: boolean;
     followUp1Remark?: string;
-    followUp2Remark?: string;
-    followUp3Remark?: string;
   }
-): Promise<{ success: boolean }> => {
+): Promise<{ 
+  success: boolean; 
+  alreadyDone?: boolean; 
+  followupsDone: number; 
+  followUp2Date?: string; 
+  followUp3Date?: string; 
+}> => {
   const body = new URLSearchParams();
   body.append("token", TOKEN);
   body.append("action", "updateFollowUpStatus");
   body.append("warrantyId", data.warrantyId);
-  body.append("followUp1Done", String(data.followUp1Done));
   if (data.followUp1Remark) body.append("followUp1Remark", data.followUp1Remark);
-  if (data.followUp2Remark) body.append("followUp2Remark", data.followUp2Remark);
-  if (data.followUp3Remark) body.append("followUp3Remark", data.followUp3Remark);
+  body.append("updatedBy", "Dashboard");
 
   const res = await fetch(BASE, {
     method: "POST",
@@ -223,5 +225,36 @@ export const updateFollowUpStatus = async (
   if (!res.ok) throw new Error(`Failed to update follow-up status: ${res.status}`);
   const json = await res.json();
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
-  return { success: true };
+  return json;
+};
+
+// New function: Mark follow-up as done
+export const markFollowUp = async (
+  warrantyId: string,
+  followUpNo: 2 | 3,
+  remark: string
+): Promise<{ 
+  success: boolean; 
+  alreadyDone?: boolean; 
+  followupsDone: number; 
+  followUp2Date?: string; 
+  followUp3Date?: string; 
+}> => {
+  const body = new URLSearchParams();
+  body.append("token", TOKEN);
+  body.append("action", "markFollowUp");
+  body.append("warrantyId", warrantyId);
+  body.append("followUpNo", String(followUpNo));
+  body.append("remark", remark);
+  body.append("updatedBy", "Dashboard");
+
+  const res = await fetch(BASE, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body,
+  });
+  if (!res.ok) throw new Error(`Failed to mark follow-up: ${res.status}`);
+  const json = await res.json();
+  if (!json?.success) throw new Error(json?.error || "Unknown API error");
+  return json;
 };

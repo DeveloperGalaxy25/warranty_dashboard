@@ -19,6 +19,8 @@ export interface WarrantyRecord {
   lastUpdatedOn: string;
   warrantyCardUrl: string;
   sourceKey: string;
+  extendedWarrantySent?: boolean;
+  followupsDone?: number;
 }
 
 export const useWarrantyData = (filters?: {

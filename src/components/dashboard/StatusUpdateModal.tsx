@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Check, Clock, User } from "lucide-react";
 import { format } from "date-fns";
 import { WarrantyRecord } from "@/hooks/useWarrantyData";
-import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus } from "@/lib/warrantyService";
+import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus, markFollowUp } from "@/lib/warrantyService";
 import { cn } from "@/lib/utils";
 
 interface StatusUpdateModalProps {
@@ -32,6 +32,11 @@ interface FollowUpData {
   followUp2Remark: string;
   followUp3Done: boolean;
   followUp3Remark: string;
+  followUp1Disabled: boolean;
+  followUp2Disabled: boolean;
+  followUp3Disabled: boolean;
+  followUp2Date?: string;
+  followUp3Date?: string;
 }
 
 // Follow-up history interface
@@ -54,7 +59,10 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
     followUp2Done: false,
     followUp2Remark: "",
     followUp3Done: false,
-    followUp3Remark: ""
+    followUp3Remark: "",
+    followUp1Disabled: false,
+    followUp2Disabled: false,
+    followUp3Disabled: false
   });
   const [loading, setLoading] = useState(false);
   const [followUpSummary, setFollowUpSummary] = useState<FollowUpSummary | null>(null);
@@ -70,6 +78,16 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
       loadFollowUpHistory();
       // Prefill basic: if we ever store summary server-side, fetch it here
       setFollowUpSummary((prev) => prev || { count: 0, stages: [], latest: null, nextDue: null });
+      
+      // Check if follow-ups are already done and disable them
+      if (customer.followupsDone !== undefined) {
+        setFollowUpData(prev => ({
+          ...prev,
+          followUp1Disabled: customer.followupsDone >= 1,
+          followUp2Disabled: customer.followupsDone >= 2,
+          followUp3Disabled: customer.followupsDone >= 3
+        }));
+      }
     }
   }, [isOpen, customer]);
 
@@ -98,37 +116,50 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
         // Handle follow-up updates with automatic timestamp detection
         if (followUpData.followUp1Done && !followUpSummary?.stages.includes(1)) {
           // When Follow-up 1 is checked, automatically detect timestamp and calculate other dates
-          await updateFollowUpStatus({
+          const response = await updateFollowUpStatus({
             warrantyId: customer.warrantyId,
-            followUp1Done: true,
-            followUp1Remark: followUpData.followUp1Remark,
-            followUp2Remark: followUpData.followUp2Remark,
-            followUp3Remark: followUpData.followUp3Remark
+            followUp1Remark: followUpData.followUp1Remark
           });
+          
+          if (response.success) {
+            // Disable follow-up 1 permanently
+            setFollowUpData(prev => ({
+              ...prev,
+              followUp1Disabled: true,
+              followUp2Date: response.followUp2Date,
+              followUp3Date: response.followUp3Date
+            }));
+          }
         } else if (followUpData.followUp2Done && !followUpSummary?.stages.includes(2)) {
           // Handle Follow-up 2 completion
-          await logFollowUpAction(
+          const response = await markFollowUp(
             customer.warrantyId,
-            customer.customerName,
-            customer.brand,
             2,
-            new Date().toISOString().slice(0,10),
-            null,
-            "Follow-up 2 Done",
             followUpData.followUp2Remark || ""
           );
+          
+          if (response.success) {
+            // Disable follow-up 2 permanently
+            setFollowUpData(prev => ({
+              ...prev,
+              followUp2Disabled: true
+            }));
+          }
         } else if (followUpData.followUp3Done && !followUpSummary?.stages.includes(3)) {
           // Handle Follow-up 3 completion
-          await logFollowUpAction(
+          const response = await markFollowUp(
             customer.warrantyId,
-            customer.customerName,
-            customer.brand,
             3,
-            new Date().toISOString().slice(0,10),
-            null,
-            "Follow-up 3 Done",
             followUpData.followUp3Remark || ""
           );
+          
+          if (response.success) {
+            // Disable follow-up 3 permanently
+            setFollowUpData(prev => ({
+              ...prev,
+              followUp3Disabled: true
+            }));
+          }
         } else if (followUpData.followUp1Remark || followUpData.followUp2Remark || followUpData.followUp3Remark) {
           // Handle remarks only (no follow-up completion)
           const nextNo = (followUpSummary?.count || 0) + 1;
@@ -274,6 +305,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     type="checkbox"
                     checked={followUpData.followUp1Done}
                     onChange={(e) => handleFollowUpToggle(1, e.target.checked)}
+                    disabled={followUpData.followUp1Disabled}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="f1">Follow-up 1 Done</Label>
@@ -289,6 +321,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     placeholder="F1 Remark"
                     value={followUpData.followUp1Remark}
                     onChange={(e) => handleRemarkChange(1, e.target.value)}
+                    disabled={followUpData.followUp1Disabled}
                   />
                 </div>
               </div>
@@ -301,7 +334,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     type="checkbox"
                     checked={followUpData.followUp2Done}
                     onChange={(e) => handleFollowUpToggle(2, e.target.checked)}
-                    disabled={!followUpData.followUp1Done}
+                    disabled={!followUpData.followUp1Done || followUpData.followUp2Disabled}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="f2">Follow-up 2 Done</Label>
@@ -309,6 +342,11 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     Auto calculated
                   </span>
                 </div>
+                {followUpData.followUp2Date && (
+                  <div className="text-xs text-muted-foreground">
+                    Due: {new Date(followUpData.followUp2Date).toLocaleDateString()}
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="f2Remark" className="text-sm font-medium">F2 Remark</Label>
                   <input
@@ -317,6 +355,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     placeholder="F2 Remark"
                     value={followUpData.followUp2Remark}
                     onChange={(e) => handleRemarkChange(2, e.target.value)}
+                    disabled={followUpData.followUp2Disabled}
                   />
                 </div>
               </div>
@@ -329,7 +368,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     type="checkbox"
                     checked={followUpData.followUp3Done}
                     onChange={(e) => handleFollowUpToggle(3, e.target.checked)}
-                    disabled={!followUpData.followUp2Done}
+                    disabled={!followUpData.followUp2Done || followUpData.followUp3Disabled}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="f3">Follow-up 3 Done</Label>
@@ -337,6 +376,11 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     Auto calculated
                   </span>
                 </div>
+                {followUpData.followUp3Date && (
+                  <div className="text-xs text-muted-foreground">
+                    Due: {new Date(followUpData.followUp3Date).toLocaleDateString()}
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="f3Remark" className="text-sm font-medium">F3 Remark</Label>
                   <input
@@ -345,6 +389,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     placeholder="F3 Remark"
                     value={followUpData.followUp3Remark}
                     onChange={(e) => handleRemarkChange(3, e.target.value)}
+                    disabled={followUpData.followUp3Disabled}
                   />
                 </div>
               </div>
