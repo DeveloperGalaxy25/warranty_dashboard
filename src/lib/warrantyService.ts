@@ -176,6 +176,19 @@ export const getWorkflowHistory = async (
   return apiGetJson({ action: 'getHistory', warrantyId }) as Promise<any[]>;
 };
 
+// Get follow-up state for a warranty
+export const getFollowupState = async (
+  warrantyId: string
+): Promise<{
+  warrantyId: string;
+  followUp1: { done: boolean; timestamp: string; remark: string };
+  followUp2: { done: boolean; date: string; remark: string };
+  followUp3: { done: boolean; date: string; remark: string };
+  followupsDone: number;
+}> => {
+  return apiGetJson({ action: 'getFollowupState', warrantyId });
+};
+
 export const getCustomerDetails = async (warrantyId: string): Promise<any> => {
   return apiGetJson({ action: 'getCustomerDetails', warrantyId });
 };
@@ -207,6 +220,8 @@ export const updateFollowUpStatus = async (
   success: boolean; 
   alreadyDone?: boolean; 
   followupsDone: number; 
+  f1Timestamp?: string; 
+  f1Remark?: string; 
   followUp2Date?: string; 
   followUp3Date?: string; 
 }> => {
@@ -237,6 +252,8 @@ export const markFollowUp = async (
   success: boolean; 
   alreadyDone?: boolean; 
   followupsDone: number; 
+  f1Timestamp?: string; 
+  f1Remark?: string; 
   followUp2Date?: string; 
   followUp3Date?: string; 
 }> => {

@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Check, Clock, User } from "lucide-react";
 import { format } from "date-fns";
 import { WarrantyRecord } from "@/hooks/useWarrantyData";
-import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus, markFollowUp } from "@/lib/warrantyService";
+import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus, markFollowUp, getFollowupState } from "@/lib/warrantyService";
 import { cn } from "@/lib/utils";
 
 interface StatusUpdateModalProps {
@@ -14,6 +14,7 @@ interface StatusUpdateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: () => void;
+  onFollowUpUpdate?: (warrantyId: string, followupsDone: number) => void;
 }
 
 // Follow-up summary interface
@@ -28,15 +29,16 @@ interface FollowUpSummary {
 interface FollowUpData {
   followUp1Done: boolean;
   followUp1Remark: string;
+  followUp1Timestamp?: string;
   followUp2Done: boolean;
   followUp2Remark: string;
+  followUp2Date?: string;
   followUp3Done: boolean;
   followUp3Remark: string;
+  followUp3Date?: string;
   followUp1Disabled: boolean;
   followUp2Disabled: boolean;
   followUp3Disabled: boolean;
-  followUp2Date?: string;
-  followUp3Date?: string;
 }
 
 // Follow-up history interface
@@ -50,7 +52,7 @@ interface FollowUpHistory {
   timestamp: string;
 }
 
-export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: StatusUpdateModalProps) => {
+export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollowUpUpdate }: StatusUpdateModalProps) => {
   const [reviewDone, setReviewDone] = useState<boolean>(false);
   const [remark, setRemark] = useState("");
   const [followUpData, setFollowUpData] = useState<FollowUpData>({
@@ -72,24 +74,40 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
 
   const isReviewCompleted = Boolean(customer?.status === "Review Won" || customer?.status === "Closed" || customer?.status === "Completed");
 
-  // Load follow-up history when modal opens
+  // Load follow-up history and state when modal opens
   useEffect(() => {
     if (isOpen && customer) {
       loadFollowUpHistory();
+      loadFollowupState();
       // Prefill basic: if we ever store summary server-side, fetch it here
       setFollowUpSummary((prev) => prev || { count: 0, stages: [], latest: null, nextDue: null });
-      
-      // Check if follow-ups are already done and disable them
-      if (customer.followupsDone !== undefined) {
-        setFollowUpData(prev => ({
-          ...prev,
-          followUp1Disabled: customer.followupsDone >= 1,
-          followUp2Disabled: customer.followupsDone >= 2,
-          followUp3Disabled: customer.followupsDone >= 3
-        }));
-      }
     }
   }, [isOpen, customer]);
+
+  const loadFollowupState = async () => {
+    if (!customer.warrantyId) return;
+    
+    try {
+      const state = await getFollowupState(customer.warrantyId);
+      
+      setFollowUpData({
+        followUp1Done: state.followUp1.done,
+        followUp1Remark: state.followUp1.remark,
+        followUp1Timestamp: state.followUp1.timestamp,
+        followUp2Done: state.followUp2.done,
+        followUp2Remark: state.followUp2.remark,
+        followUp2Date: state.followUp2.date,
+        followUp3Done: state.followUp3.done,
+        followUp3Remark: state.followUp3.remark,
+        followUp3Date: state.followUp3.date,
+        followUp1Disabled: state.followUp1.done,
+        followUp2Disabled: state.followUp2.done,
+        followUp3Disabled: state.followUp3.done
+      });
+    } catch (error) {
+      console.error('Failed to load follow-up state:', error);
+    }
+  };
 
   const loadFollowUpHistory = async () => {
     if (!customer.warrantyId) return;
@@ -114,7 +132,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
         setFollowUpSummary({ count: 3, stages: [1,2,3], latest: new Date().toISOString().slice(0,10), nextDue: null });
       } else {
         // Handle follow-up updates with automatic timestamp detection
-        if (followUpData.followUp1Done && !followUpSummary?.stages.includes(1)) {
+        if (followUpData.followUp1Done && !followUpData.followUp1Disabled) {
           // When Follow-up 1 is checked, automatically detect timestamp and calculate other dates
           const response = await updateFollowUpStatus({
             warrantyId: customer.warrantyId,
@@ -122,15 +140,22 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
           });
           
           if (response.success) {
-            // Disable follow-up 1 permanently
+            // Update follow-up data with response
             setFollowUpData(prev => ({
               ...prev,
               followUp1Disabled: true,
+              followUp1Timestamp: response.f1Timestamp,
+              followUp1Remark: response.f1Remark || prev.followUp1Remark,
               followUp2Date: response.followUp2Date,
               followUp3Date: response.followUp3Date
             }));
+            
+            // Update parent component's follow-ups count
+            if (onFollowUpUpdate) {
+              onFollowUpUpdate(customer.warrantyId, response.followupsDone);
+            }
           }
-        } else if (followUpData.followUp2Done && !followUpSummary?.stages.includes(2)) {
+        } else if (followUpData.followUp2Done && !followUpData.followUp2Disabled) {
           // Handle Follow-up 2 completion
           const response = await markFollowUp(
             customer.warrantyId,
@@ -139,13 +164,20 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
           );
           
           if (response.success) {
-            // Disable follow-up 2 permanently
+            // Update follow-up data with response
             setFollowUpData(prev => ({
               ...prev,
-              followUp2Disabled: true
+              followUp2Disabled: true,
+              followUp2Date: response.followUp2Date,
+              followUp3Date: response.followUp3Date
             }));
+            
+            // Update parent component's follow-ups count
+            if (onFollowUpUpdate) {
+              onFollowUpUpdate(customer.warrantyId, response.followupsDone);
+            }
           }
-        } else if (followUpData.followUp3Done && !followUpSummary?.stages.includes(3)) {
+        } else if (followUpData.followUp3Done && !followUpData.followUp3Disabled) {
           // Handle Follow-up 3 completion
           const response = await markFollowUp(
             customer.warrantyId,
@@ -154,11 +186,18 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
           );
           
           if (response.success) {
-            // Disable follow-up 3 permanently
+            // Update follow-up data with response
             setFollowUpData(prev => ({
               ...prev,
-              followUp3Disabled: true
+              followUp3Disabled: true,
+              followUp2Date: response.followUp2Date,
+              followUp3Date: response.followUp3Date
             }));
+            
+            // Update parent component's follow-ups count
+            if (onFollowUpUpdate) {
+              onFollowUpUpdate(customer.warrantyId, response.followupsDone);
+            }
           }
         } else if (followUpData.followUp1Remark || followUpData.followUp2Remark || followUpData.followUp3Remark) {
           // Handle remarks only (no follow-up completion)
@@ -313,15 +352,21 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                     Auto timestamp
                   </span>
                 </div>
+                {followUpData.followUp1Timestamp && (
+                  <div className="text-xs text-muted-foreground">
+                    Saved at {new Date(followUpData.followUp1Timestamp).toLocaleString()}
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="f1Remark" className="text-sm font-medium">F1 Remark</Label>
-                  <input
+                  <textarea
                     id="f1Remark"
-                    className="w-full border rounded px-3 py-2 text-sm mt-1"
+                    className="w-full border rounded px-3 py-2 text-sm mt-1 resize-none"
                     placeholder="F1 Remark"
                     value={followUpData.followUp1Remark}
                     onChange={(e) => handleRemarkChange(1, e.target.value)}
                     disabled={followUpData.followUp1Disabled}
+                    rows={3}
                   />
                 </div>
               </div>
@@ -349,13 +394,14 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate }: Statu
                 )}
                 <div>
                   <Label htmlFor="f2Remark" className="text-sm font-medium">F2 Remark</Label>
-                  <input
+                  <textarea
                     id="f2Remark"
-                    className="w-full border rounded px-3 py-2 text-sm mt-1"
+                    className="w-full border rounded px-3 py-2 text-sm mt-1 resize-none"
                     placeholder="F2 Remark"
                     value={followUpData.followUp2Remark}
                     onChange={(e) => handleRemarkChange(2, e.target.value)}
                     disabled={followUpData.followUp2Disabled}
+                    rows={3}
                   />
                 </div>
               </div>

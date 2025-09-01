@@ -71,6 +71,7 @@ const WarrantyDashboard: React.FC = () => {
   const [activeWarrantyFilter, setActiveWarrantyFilter] = useState<string>("");
   const [showReviewPendingOnly, setShowReviewPendingOnly] = useState<boolean>(false);
   const [showTodayDueOnly, setShowTodayDueOnly] = useState<boolean>(false);
+  const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
 
   const { data, loading, error } = useWarrantyData({
     brand: brand === "All" ? undefined : brand,
@@ -103,7 +104,7 @@ const WarrantyDashboard: React.FC = () => {
         FeedbackReceived: (w as any).feedbackReceived ?? (w as any).FeedbackReceived ?? false,
         ExtendedWarrantySent: (w as any).extendedWarrantySent ?? (w as any).ExtendedWarrantySent ?? false,
         FollowUpStatus: (w as any).followUpStatus ?? (w as any).FollowUpStatus ?? 'Pending',
-        FollowupsDone: (w as any).followupsDone ?? (w as any).FollowupsDone ?? 0,
+        FollowupsDone: followUpCounts[w.warrantyId] ?? (w as any).followupsDone ?? (w as any).FollowupsDone ?? 0,
         NextFollowUp: nfDate ? nfDate.toISOString() : "",
         AssignedTo: w.assignedAgent || (w as any).AssignedTo || "",
         PurchasedFrom: w.purchasedFrom || (w as any).PurchasedFrom || "",
@@ -261,6 +262,12 @@ const WarrantyDashboard: React.FC = () => {
           isOpen={Boolean(selected)}
           onClose={() => setSelected(null)}
           onUpdate={() => setRefreshVersion((v) => v + 1)}
+          onFollowUpUpdate={(warrantyId, followupsDone) => {
+            setFollowUpCounts(prev => ({
+              ...prev,
+              [warrantyId]: followupsDone
+            }));
+          }}
         />
       )}
     </div>
