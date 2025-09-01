@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { KPICards } from "./dashboard/KPICards";
 import { DateRangePicker } from "./dashboard/DateRangePicker";
 import { CustomerTable } from "./dashboard/CustomerTable";
 import { StatusUpdateModal } from "./dashboard/StatusUpdateModal";
 import { useWarrantyData, type WarrantyRecord } from "@/hooks/useWarrantyData";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getFirstFollowups, getTodaysFollowups, evaluate24NRY } from "@/lib/warrantyService";
 
 export type DateRange = { from: Date; to: Date };
 
@@ -34,6 +35,7 @@ export interface Customer {
   ExtendedWarrantySent?: boolean;
   FollowUpStatus?: 'Pending' | 'Completed' | 'Overdue';
   FollowupsDone?: number;
+  NRY24?: string;
 }
 
 function toDate(value: unknown): Date | null {
@@ -71,7 +73,10 @@ const WarrantyDashboard: React.FC = () => {
   const [activeWarrantyFilter, setActiveWarrantyFilter] = useState<string>("");
   const [showReviewPendingOnly, setShowReviewPendingOnly] = useState<boolean>(false);
   const [showTodayDueOnly, setShowTodayDueOnly] = useState<boolean>(false);
+  const [showFirstFollowupsOnly, setShowFirstFollowupsOnly] = useState<boolean>(false);
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
+  const [firstFollowupsData, setFirstFollowupsData] = useState<Customer[]>([]);
+  const [todaysFollowupsData, setTodaysFollowupsData] = useState<Customer[]>([]);
 
   const { data, loading, error } = useWarrantyData({
     brand: brand === "All" ? undefined : brand,
@@ -82,6 +87,11 @@ const WarrantyDashboard: React.FC = () => {
     // @ts-ignore
     refreshVersion,
   } as any);
+
+  // Call evaluate24NRY on app load (fire-and-forget)
+  useEffect(() => {
+    evaluate24NRY();
+  }, []);
 
   const customers: Customer[] = useMemo(() => {
     return (data || []).map((w) => {
@@ -105,6 +115,7 @@ const WarrantyDashboard: React.FC = () => {
         ExtendedWarrantySent: (w as any).extendedWarrantySent ?? (w as any).ExtendedWarrantySent ?? false,
         FollowUpStatus: (w as any).followUpStatus ?? (w as any).FollowUpStatus ?? 'Pending',
         FollowupsDone: followUpCounts[w.warrantyId] ?? (w as any).followupsDone ?? (w as any).FollowupsDone ?? 0,
+        NRY24: (w as any).nry24 ?? (w as any).NRY24,
         NextFollowUp: nfDate ? nfDate.toISOString() : "",
         AssignedTo: w.assignedAgent || (w as any).AssignedTo || "",
         PurchasedFrom: w.purchasedFrom || (w as any).PurchasedFrom || "",
@@ -158,6 +169,86 @@ const WarrantyDashboard: React.FC = () => {
   if (loading) return <p className="p-6">Loading warranties...</p>;
   if (error) return <p className="p-6 text-red-500">Error: {error}</p>;
 
+  const handleFirstFollowupClick = async () => {
+    try {
+      const firstFollowups = await getFirstFollowups();
+      const mappedData = firstFollowups.map((w: any) => {
+        const ts = w.timestamp || w.Timestamp;
+        const nf = w.nextFollowUp || w.NextFollowUp;
+        const tsDate = toDate(ts);
+        const nfDate = toDate(nf);
+        return {
+          id: w.id,
+          WarrantyID: w.warrantyId || w.WarrantyID || w.id,
+          Timestamp: tsDate ? tsDate.toISOString() : "",
+          timestamp: tsDate ? tsDate.toISOString() : "",
+          Brand: w.brand || w.Brand || "",
+          brand: w.brand || "",
+          CustomerName: w.customerName || w.CustomerName || "",
+          Email: w.email || w.Email || "",
+          Mobile: w.phone || w.Mobile || "",
+          Product: w.product || w.Product || "",
+          WarrantyCardSent: w.warrantyCardSent ?? w.WarrantyCardSent ?? false,
+          FeedbackReceived: w.feedbackReceived ?? w.FeedbackReceived ?? false,
+          ExtendedWarrantySent: w.extendedWarrantySent ?? w.ExtendedWarrantySent ?? false,
+          FollowUpStatus: w.followUpStatus ?? w.FollowUpStatus ?? 'Pending',
+          FollowupsDone: followUpCounts[w.warrantyId] ?? w.followupsDone ?? w.FollowupsDone ?? 0,
+          NRY24: w.nry24 ?? w.NRY24,
+          NextFollowUp: nfDate ? nfDate.toISOString() : "",
+          AssignedTo: w.assignedAgent || w.AssignedTo || "",
+          PurchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
+          purchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
+        } as Customer;
+      });
+      setFirstFollowupsData(mappedData);
+      setShowFirstFollowupsOnly(true);
+      setShowReviewPendingOnly(false);
+      setShowTodayDueOnly(false);
+    } catch (error) {
+      console.error('Failed to fetch first follow-ups:', error);
+    }
+  };
+
+  const handleTodaysFollowupsClick = async () => {
+    try {
+      const todaysFollowups = await getTodaysFollowups();
+      const mappedData = todaysFollowups.map((w: any) => {
+        const ts = w.timestamp || w.Timestamp;
+        const nf = w.nextFollowUp || w.NextFollowUp;
+        const tsDate = toDate(ts);
+        const nfDate = toDate(nf);
+        return {
+          id: w.id,
+          WarrantyID: w.warrantyId || w.WarrantyID || w.id,
+          Timestamp: tsDate ? tsDate.toISOString() : "",
+          timestamp: tsDate ? tsDate.toISOString() : "",
+          Brand: w.brand || w.Brand || "",
+          brand: w.brand || "",
+          CustomerName: w.customerName || w.CustomerName || "",
+          Email: w.email || w.Email || "",
+          Mobile: w.phone || w.Mobile || "",
+          Product: w.product || w.Product || "",
+          WarrantyCardSent: w.warrantyCardSent ?? w.WarrantyCardSent ?? false,
+          FeedbackReceived: w.feedbackReceived ?? w.FeedbackReceived ?? false,
+          ExtendedWarrantySent: w.extendedWarrantySent ?? w.ExtendedWarrantySent ?? false,
+          FollowUpStatus: w.followUpStatus ?? w.FollowUpStatus ?? 'Pending',
+          FollowupsDone: followUpCounts[w.warrantyId] ?? w.followupsDone ?? w.FollowupsDone ?? 0,
+          NRY24: w.nry24 ?? w.NRY24,
+          NextFollowUp: nfDate ? nfDate.toISOString() : "",
+          AssignedTo: w.assignedAgent || w.AssignedTo || "",
+          PurchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
+          purchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
+        } as Customer;
+      });
+      setTodaysFollowupsData(mappedData);
+      setShowTodayDueOnly(true);
+      setShowReviewPendingOnly(false);
+      setShowFirstFollowupsOnly(false);
+    } catch (error) {
+      console.error('Failed to fetch today\'s follow-ups:', error);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -184,6 +275,7 @@ const WarrantyDashboard: React.FC = () => {
                 if (e.key === 'Enter') {
                   setShowReviewPendingOnly(false);
                   setShowTodayDueOnly(false);
+                  setShowFirstFollowupsOnly(false);
                   const v = searchId.trim();
                   setActiveWarrantyFilter(v);
                 }
@@ -194,6 +286,7 @@ const WarrantyDashboard: React.FC = () => {
               onClick={() => {
                 setShowReviewPendingOnly(false);
                 setShowTodayDueOnly(false);
+                setShowFirstFollowupsOnly(false);
                 setActiveWarrantyFilter(searchId.trim());
               }}
             >Search</button>
@@ -209,25 +302,22 @@ const WarrantyDashboard: React.FC = () => {
           setSearchId("");
           setShowReviewPendingOnly(true);
           setShowTodayDueOnly(false);
+          setShowFirstFollowupsOnly(false);
         }}
         onTotalClick={() => {
           // Clear all ad-hoc filters and show full dataset under current brand/date
           setShowReviewPendingOnly(false);
           setShowTodayDueOnly(false);
+          setShowFirstFollowupsOnly(false);
           setActiveWarrantyFilter("");
           setSearchId("");
         }}
-        onTodayDueClick={() => {
-          // Apply filter: Show only today's follow-ups due
-          setActiveWarrantyFilter("");
-          setSearchId("");
-          setShowReviewPendingOnly(false);
-          setShowTodayDueOnly(true);
-        }}
+        onTodayDueClick={handleTodaysFollowupsClick}
+        onFirstFollowupClick={handleFirstFollowupClick}
       />
 
       <CustomerTable
-        customers={(todayDueFilteredCustomers as any).filter((c: any) => (
+        customers={showFirstFollowupsOnly ? firstFollowupsData : showTodayDueOnly ? todaysFollowupsData : (todayDueFilteredCustomers as any).filter((c: any) => (
           showReviewPendingOnly ? (Boolean(c.WarrantyCardSent) && !c.FeedbackReceived) : true
         ))}
         onCustomerClick={(c) => {
@@ -275,3 +365,4 @@ const WarrantyDashboard: React.FC = () => {
 };
 
 export default WarrantyDashboard;
+

@@ -1,15 +1,21 @@
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Users, Send, AlertTriangle, Calendar } from "lucide-react";
+import { TrendingUp, Users, Send, AlertTriangle, Calendar, Clock } from "lucide-react";
 import { Customer } from "../WarrantyDashboard";
+import { useEffect, useState } from "react";
+import { getFirstFollowupKpi, getTodaysFollowupsKpi } from "@/lib/warrantyService";
 
 interface KPICardsProps {
   customers: Customer[];
   onReviewPendingClick?: () => void;
   onTotalClick?: () => void;
   onTodayDueClick?: () => void;
+  onFirstFollowupClick?: () => void;
 }
 
-export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onTodayDueClick }: KPICardsProps) => {
+export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onTodayDueClick, onFirstFollowupClick }: KPICardsProps) => {
+  const [firstFollowupKpi, setFirstFollowupKpi] = useState<{ count: number; asOf: string } | null>(null);
+  const [todaysFollowupsKpi, setTodaysFollowupsKpi] = useState<{ count: number; asOf: string } | null>(null);
+  
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   
@@ -34,6 +40,34 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
     
     return nextFollowUpStart.getTime() === todayStart.getTime();
   }).length;
+
+  // Fetch first follow-up KPI data on mount
+  useEffect(() => {
+    const fetchFirstFollowupKpi = async () => {
+      try {
+        const kpi = await getFirstFollowupKpi();
+        setFirstFollowupKpi(kpi);
+      } catch (error) {
+        console.error('Failed to fetch first follow-up KPI:', error);
+      }
+    };
+    
+    fetchFirstFollowupKpi();
+  }, []);
+
+  // Fetch today's follow-ups KPI data on mount
+  useEffect(() => {
+    const fetchTodaysFollowupsKpi = async () => {
+      try {
+        const kpi = await getTodaysFollowupsKpi();
+        setTodaysFollowupsKpi(kpi);
+      } catch (error) {
+        console.error('Failed to fetch today\'s follow-ups KPI:', error);
+      }
+    };
+    
+    fetchTodaysFollowupsKpi();
+  }, []);
 
   const kpis = [
     {
@@ -72,17 +106,26 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
     },
     {
       title: "Today's Follow-ups Due",
-      value: todayDueCount,
-      description: "due today",
+      value: todaysFollowupsKpi?.count || 0,
+      description: todaysFollowupsKpi?.asOf ? `as of ${new Date(todaysFollowupsKpi.asOf).toLocaleString()}` : "due today",
       icon: Calendar,
-      trend: todayDueCount > 0 ? "requires action" : "all caught up",
+      trend: todaysFollowupsKpi?.count ? "requires action" : "all caught up",
       className: "bg-gradient-to-br from-card to-orange-100 hover:shadow-lg",
+      clickable: true as const,
+    },
+    {
+      title: "1st Follow-ups",
+      value: firstFollowupKpi?.count || 0,
+      description: firstFollowupKpi?.asOf ? `as of ${new Date(firstFollowupKpi.asOf).toLocaleString()}` : "loading...",
+      icon: Clock,
+      trend: firstFollowupKpi ? "ready" : "loading",
+      className: "bg-gradient-to-br from-card to-blue-100 hover:shadow-lg",
       clickable: true as const,
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
       {kpis.map((kpi, index) => {
         const valueClass = kpi.title === "Still Review Pending"
           ? (kpi.value > 0 ? "text-amber-600 font-extrabold" : "text-muted-foreground")
@@ -100,6 +143,7 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
               if (kpi.title === "Still Review Pending" && onReviewPendingClick) onReviewPendingClick();
               if (kpi.title === "Total Registrations" && onTotalClick) onTotalClick();
               if (kpi.title === "Today's Follow-ups Due" && onTodayDueClick) onTodayDueClick();
+              if (kpi.title === "1st Follow-ups" && onFirstFollowupClick) onFirstFollowupClick();
             }}
           >
             <CardContent className="p-6">

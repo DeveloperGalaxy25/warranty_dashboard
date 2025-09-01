@@ -210,6 +210,37 @@ export const getFollowupSummary = async (warrantyId: string): Promise<FollowUpSu
   return map[warrantyId] || { count: 0, stages: [], latest: null, nextDue: null };
 };
 
+// Get first follow-up KPI data
+export const getFirstFollowupKpi = async (): Promise<{ count: number; asOf: string }> => {
+  return apiGetJson({ action: 'firstFollowupKpi' });
+};
+
+// Get list of first follow-ups
+export const getFirstFollowups = async (): Promise<any[]> => {
+  const response = await apiGetJson({ action: 'listFirstFollowups' });
+  return response.success ? response.data : [];
+};
+
+// Evaluate 24h NRY (fire-and-forget)
+export const evaluate24NRY = async (): Promise<void> => {
+  try {
+    await apiGetJson({ action: 'evaluate24NRY' });
+  } catch (error) {
+    console.warn('24h NRY evaluation failed:', error);
+  }
+};
+
+// Get today's follow-ups KPI data
+export const getTodaysFollowupsKpi = async (): Promise<{ count: number; asOf: string }> => {
+  return apiGetJson({ action: 'todaysFollowupsKpi' });
+};
+
+// Get list of today's follow-ups
+export const getTodaysFollowups = async (): Promise<any[]> => {
+  const response = await apiGetJson({ action: 'listTodaysFollowups' });
+  return response.success ? response.data : [];
+};
+
 // New function: Update follow-up status with automatic timestamp detection
 export const updateFollowUpStatus = async (
   data: {

@@ -16,7 +16,7 @@ interface CustomerTableProps {
   onCustomerClick: (customer: Customer) => void;
 }
 
-type SortField = 'Timestamp' | 'Brand' | 'CustomerName' | 'PurchasedFrom' | 'WarrantyCardSent' | 'FeedbackReceived' | 'ExtendedWarrantySent' | 'FollowUpStatus' | 'FollowUpsDone';
+type SortField = 'Timestamp' | 'Brand' | 'CustomerName' | 'PurchasedFrom' | 'WarrantyCardSent' | 'FeedbackReceived' | 'ExtendedWarrantySent' | 'NRY24' | 'FollowUpStatus' | 'FollowUpsDone';
 type SortDirection = 'asc' | 'desc';
 
 // Follow-up summary interface
@@ -39,6 +39,7 @@ const COLUMN_DEFS = [
   { id: 'warrantyCardSent',  label: 'Warranty Card Sent',     default: true, sortable: true },
   { id: 'feedbackReceived',  label: 'Feedback Received',      default: true, sortable: true },
   { id: 'extendedSent',      label: 'Extended Warranty Sent', default: true, sortable: true },
+  { id: 'nry24',             label: '24h NRY',                default: false, sortable: true },
   { id: 'followUpStatus',    label: 'Follow-Up Status',       default: true, sortable: true },
   { id: 'followUpsDone',     label: 'Follow-ups Done',        default: true, sortable: true }
 ];
@@ -570,6 +571,18 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
             )}
           </td>
         );
+      case 'nry24':
+        return (
+          <td className="px-4 py-3 text-sm text-foreground">
+            {customer.NRY24 ? (
+              <Badge className={customer.NRY24 === 'YES' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                {customer.NRY24}
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground">-</span>
+            )}
+          </td>
+        );
       case 'followUpStatus':
         return (
           <td className="px-4 py-3">
@@ -607,6 +620,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         'warrantyCardSent': 'WarrantyCardSent',
         'feedbackReceived': 'FeedbackReceived',
         'extendedSent': 'ExtendedWarrantySent',
+        'nry24': 'NRY24',
         'followUpStatus': 'FollowUpStatus',
         'followUpsDone': 'FollowUpsDone'
       };
