@@ -8,6 +8,24 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: mode === 'development' ? {
+      '/api': {
+        target: 'https://script.google.com/macros/s/AKfycbz85VR12pAgQ0v_YgVqJuCIOxv8HPO3ua4AUKbYB6C4ZESOd43SBpPe-E1WRK0IK_s0/exec',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      }
+    } : undefined,
   },
   plugins: [
     react(),

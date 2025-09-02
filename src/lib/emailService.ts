@@ -59,11 +59,14 @@ export class EmailService {
     try {
       const preview = this.generateWarrantyCardPreview(data);
       const brandConfig = getBrandEmailConfig(data.brand);
+
+      const base = (import.meta as any).env?.VITE_SHEETS_API_BASE as string;
+      const token = (import.meta as any).env?.VITE_SHEETS_API_TOKEN || '';
       
       // Prepare payload for Apps Script
       const payload = {
         action: 'sendWarrantyEmail',
-        token: process.env.VITE_SHEETS_API_TOKEN,
+        token,
         customerData: {
           warrantyId: data.warrantyId,
           customerName: data.customerName,
@@ -81,15 +84,20 @@ export class EmailService {
           fromName: preview.fromName,
           replyTo: preview.replyTo
         }
-      };
+      } as const;
 
-      // Send to Apps Script endpoint
-      const response = await fetch(process.env.VITE_SHEETS_API_BASE || '', {
+      // Send as application/x-www-form-urlencoded to avoid preflight
+      const body = new URLSearchParams();
+      Object.entries(payload).forEach(([key, value]) => {
+        body.append(key, typeof value === 'string' ? value : JSON.stringify(value));
+      });
+
+      const response = await fetch(base, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         },
-        body: JSON.stringify(payload)
+        body,
       });
 
       if (!response.ok) {

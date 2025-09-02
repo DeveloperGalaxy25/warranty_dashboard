@@ -6,6 +6,8 @@ import { StatusUpdateModal } from "./dashboard/StatusUpdateModal";
 import { useWarrantyData, type WarrantyRecord } from "@/hooks/useWarrantyData";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getFirstFollowups, getTodaysFollowups, evaluate24NRY } from "@/lib/warrantyService";
+import { KpiSkeleton } from "./KpiSkeleton";
+import { TableSkeleton } from "./TableSkeleton";
 
 export type DateRange = { from: Date; to: Date };
 
@@ -166,7 +168,17 @@ const WarrantyDashboard: React.FC = () => {
     });
   }, [searchFilteredCustomers, showTodayDueOnly]);
 
-  if (loading) return <p className="p-6">Loading warranties...</p>;
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
+        </div>
+        <KpiSkeleton />
+        <TableSkeleton />
+      </div>
+    );
+  }
   if (error) return <p className="p-6 text-red-500">Error: {error}</p>;
 
   const handleFirstFollowupClick = async () => {

@@ -1,5 +1,6 @@
 // Sheets-based service using Apps Script Web App
-const BASE = (import.meta as any).env?.VITE_SHEETS_API_BASE || "";
+// Standardize to VITE_SHEETS_API_BASE only
+const BASE: string = (import.meta as any).env?.VITE_SHEETS_API_BASE as string;
 const TOKEN = (import.meta as any).env?.VITE_SHEETS_API_TOKEN || "";
 
 export const getWarranties = async (filters?: {
@@ -58,11 +59,17 @@ export const updateWarrantyStatus = async (
 // Review done: write to WorkFlow_Log only; optional remark
 // ---- JSON API helpers aligned with Apps Script endpoints ----
 async function apiPostJson<T = any>(payload: Record<string, any>): Promise<T> {
-  const body = { token: TOKEN || undefined, ...payload };
+  // Send payload as form-encoded to avoid preflight
+  const body = new URLSearchParams();
+  body.append("token", TOKEN);
+  Object.entries(payload).forEach(([key, value]) => {
+    // Preserve field names; stringify non-primitives
+    body.append(key, typeof value === "string" ? value : JSON.stringify(value));
+  });
   const res = await fetch(BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+    body,
   });
   if (!res.ok) throw new Error(`API POST failed: ${res.status}`);
   return (await res.json()) as T;
