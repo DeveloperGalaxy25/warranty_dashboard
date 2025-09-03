@@ -280,15 +280,17 @@ const WarrantyDashboard: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Back button above the title */}
+      <div>
+        <button
+          aria-label="Back to Dashboard"
+          className="px-2 py-1 text-sm border rounded hover:bg-accent font-bold"
+          onClick={resetDashboard}
+        >Back</button>
+      </div>
+
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button
-            aria-label="Back to Dashboard"
-            className="px-2 py-1 text-sm border rounded hover:bg-accent"
-            onClick={resetDashboard}
-          >Back</button>
-          <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
-        </div>
+        <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
         <div className="flex items-center gap-3">
           <Select value={brand} onValueChange={(v) => { setBrand(v); setShowReviewPendingOnly(false); setShowTodayDueOnly(false); }}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Brand" /></SelectTrigger>
