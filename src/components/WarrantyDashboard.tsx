@@ -60,10 +60,12 @@ function toDate(value: unknown): Date | null {
   return null;
 }
 
+function startOfDay(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function endOfDay(d: Date): Date { const e = new Date(d.getFullYear(), d.getMonth(), d.getDate()); e.setHours(23,59,59,999); return e; }
+
 const defaultRange: DateRange = {
-  // default to last ~2 years so older rows (e.g., 2024) appear immediately
-  from: new Date(Date.now() - 730 * 24 * 60 * 60 * 1000),
-  to: new Date(),
+  from: startOfDay(new Date(Date.now() - 730 * 24 * 60 * 60 * 1000)),
+  to: endOfDay(new Date()),
 };
 
 const WarrantyDashboard: React.FC = () => {
@@ -79,6 +81,7 @@ const WarrantyDashboard: React.FC = () => {
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
   const [firstFollowupsData, setFirstFollowupsData] = useState<Customer[]>([]);
   const [todaysFollowupsData, setTodaysFollowupsData] = useState<Customer[]>([]);
+  const [kpiResetVersion, setKpiResetVersion] = useState<number>(0);
 
   const { data, loading, error } = useWarrantyData({
     brand: brand === "All" ? undefined : brand,
@@ -181,6 +184,20 @@ const WarrantyDashboard: React.FC = () => {
   }
   if (error) return <p className="p-6 text-red-500">Error: {error}</p>;
 
+  const resetDashboard = () => {
+    setBrand("All");
+    const fresh = { from: startOfDay(new Date(Date.now() - 730 * 24 * 60 * 60 * 1000)), to: endOfDay(new Date()) };
+    setRange(fresh);
+    setSearchId("");
+    setActiveWarrantyFilter("");
+    setShowReviewPendingOnly(false);
+    setShowTodayDueOnly(false);
+    setShowFirstFollowupsOnly(false);
+    setFirstFollowupsData([]);
+    setTodaysFollowupsData([]);
+    setKpiResetVersion(v => v + 1);
+  };
+
   const handleFirstFollowupClick = async () => {
     try {
       const firstFollowups = await getFirstFollowups();
@@ -264,7 +281,14 @@ const WarrantyDashboard: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
+        <div className="flex items-center gap-2">
+          <button
+            aria-label="Back to Dashboard"
+            className="px-2 py-1 text-sm border rounded hover:bg-accent"
+            onClick={resetDashboard}
+          >Back</button>
+          <h1 className="text-2xl font-bold">Warranty Dashboard</h1>
+        </div>
         <div className="flex items-center gap-3">
           <Select value={brand} onValueChange={(v) => { setBrand(v); setShowReviewPendingOnly(false); setShowTodayDueOnly(false); }}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Brand" /></SelectTrigger>
@@ -308,6 +332,7 @@ const WarrantyDashboard: React.FC = () => {
 
       <KPICards 
         customers={todayDueFilteredCustomers as any}
+        resetSignal={kpiResetVersion}
         onReviewPendingClick={() => {
           // Apply filter: WarrantyCardSent=true AND FeedbackReceived=false
           setActiveWarrantyFilter("");
@@ -323,6 +348,14 @@ const WarrantyDashboard: React.FC = () => {
           setShowFirstFollowupsOnly(false);
           setActiveWarrantyFilter("");
           setSearchId("");
+        }}
+        onRegistrationsTodayClick={() => {
+          const today = new Date();
+          const nextRange = { from: startOfDay(today), to: endOfDay(today) };
+          setRange(nextRange);
+          setShowReviewPendingOnly(false);
+          setShowTodayDueOnly(false);
+          setShowFirstFollowupsOnly(false);
         }}
         onTodayDueClick={handleTodaysFollowupsClick}
         onFirstFollowupClick={handleFirstFollowupClick}

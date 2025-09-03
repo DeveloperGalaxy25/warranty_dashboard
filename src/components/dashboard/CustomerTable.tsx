@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Phone, Mail, Check, Filter, X, Settings } from "lucide-react";
+import { ArrowUpDown, Phone, Mail, Filter, X, Settings } from "lucide-react";
 import { Customer } from "../WarrantyDashboard";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -545,7 +545,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         return (
           <td className="px-4 py-3 text-sm text-foreground">
             {customer.WarrantyCardSent ? (
-              <span className="text-emerald-600 inline-flex items-center"><Check className="h-4 w-4" /></span>
+              <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
             ) : (
               <span className="text-muted-foreground">-</span>
             )}
@@ -555,7 +555,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         return (
           <td className="px-4 py-3 text-sm text-foreground">
             {customer.FeedbackReceived ? (
-              <span className="text-emerald-600 inline-flex items-center"><Check className="h-4 w-4" /></span>
+              <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
             ) : (
               <span className="text-muted-foreground">-</span>
             )}
@@ -565,7 +565,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         return (
           <td className="px-4 py-3 text-sm text-foreground">
             {customer.ExtendedWarrantySent ? (
-              <span className="text-emerald-600 inline-flex items-center"><Check className="h-4 w-4" /></span>
+              <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
             ) : (
               <span className="text-muted-foreground">-</span>
             )}

@@ -12,31 +12,43 @@ interface DateRangePickerProps {
   onChange: (range: DateRange) => void;
 }
 
+// Normalize a Date to start of day (00:00:00.000)
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// Normalize a Date to end of day (23:59:59.999)
+function endOfDay(d: Date): Date {
+  const e = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
+
 const presetRanges = {
   "today": () => {
     const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    return { from: start, to: new Date() };
+    const start = startOfDay(today);
+    const end = endOfDay(today);
+    return { from: start, to: end };
   },
   "yesterday": () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-    const end = new Date(start);
-    end.setHours(23, 59, 59, 999);
+    const start = startOfDay(yesterday);
+    const end = endOfDay(yesterday);
     return { from: start, to: end };
   },
   "7days": () => ({
-    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    to: new Date()
+    from: startOfDay(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+    to: endOfDay(new Date())
   }),
   "30days": () => ({
-    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    to: new Date()
+    from: startOfDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+    to: endOfDay(new Date())
   }),
   "90days": () => ({
-    from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
-    to: new Date()
+    from: startOfDay(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+    to: endOfDay(new Date())
   }),
   "custom": () => null
 };
@@ -59,8 +71,9 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
 
   const handleCustomRangeSelect = (range: { from?: Date; to?: Date } | undefined) => {
     if (range?.from && range?.to) {
-      setCustomRange(range as { from: Date; to: Date });
-      onChange({ from: range.from, to: range.to });
+      const normalized = { from: startOfDay(range.from), to: endOfDay(range.to) };
+      setCustomRange(normalized);
+      onChange(normalized as { from: Date; to: Date });
       setIsOpen(false);
     } else {
       setCustomRange(range || {});
@@ -122,7 +135,7 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
               <label className="text-sm font-medium mb-2 block">Custom Date Range</label>
               <CalendarComponent
                 mode="range"
-                selected={customRange.from && customRange.to ? { from: customRange.from, to: customRange.to } : undefined}
+                selected={(customRange.from || customRange.to) ? { from: customRange.from as Date | undefined, to: customRange.to as Date | undefined } : undefined}
                 onSelect={handleCustomRangeSelect}
                 numberOfMonths={2}
                 className={cn("p-3 pointer-events-auto")}

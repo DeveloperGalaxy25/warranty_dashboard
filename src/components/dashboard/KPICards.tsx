@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Users, Send, AlertTriangle, Calendar, Clock } from "lucide-react";
+// Icons removed per requirement
 import { Customer } from "../WarrantyDashboard";
 import { useEffect, useState } from "react";
 import { getFirstFollowupKpi, getTodaysFollowupsKpi } from "@/lib/warrantyService";
@@ -10,11 +10,14 @@ interface KPICardsProps {
   onTotalClick?: () => void;
   onTodayDueClick?: () => void;
   onFirstFollowupClick?: () => void;
+  onRegistrationsTodayClick?: () => void;
+  resetSignal?: number;
 }
 
-export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onTodayDueClick, onFirstFollowupClick }: KPICardsProps) => {
+export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onTodayDueClick, onFirstFollowupClick, onRegistrationsTodayClick, resetSignal }: KPICardsProps) => {
   const [firstFollowupKpi, setFirstFollowupKpi] = useState<{ count: number; asOf: string } | null>(null);
   const [todaysFollowupsKpi, setTodaysFollowupsKpi] = useState<{ count: number; asOf: string } | null>(null);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -55,6 +58,11 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
     fetchFirstFollowupKpi();
   }, []);
 
+  // Reset active visual state when parent asks
+  useEffect(() => {
+    setActiveKey(null);
+  }, [resetSignal]);
+
   // Fetch today's follow-ups KPI data on mount
   useEffect(() => {
     const fetchTodaysFollowupsKpi = async () => {
@@ -74,52 +82,47 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
       title: "Total Registrations",
       value: totalRegistrations,
       description: "in selected range",
-      icon: Users,
       trend: "+12%",
-      className: "bg-gradient-to-br from-card to-accent/20 hover:shadow-lg",
+      className: "bg-gradient-to-br from-blue-50 to-blue-100 hover:shadow-lg border-blue-200",
       clickable: true as const,
     },
     {
       title: "Registrations Today",
       value: registrationsToday,
       description: "new today",
-      icon: TrendingUp,
       trend: "+5",
-      className: "bg-gradient-to-br from-card to-primary-light/30 hover:shadow-lg"
+      className: "bg-gradient-to-br from-green-50 to-green-100 hover:shadow-lg border-green-200",
+      clickable: true as const,
     },
     {
       title: "Warranty Cards Sent",
       value: warrantyCardsSent,
       description: "cards processed",
-      icon: Send,
       trend: `${Math.round((warrantyCardsSent / totalRegistrations) * 100)}%`,
-      className: "bg-gradient-to-br from-card to-success/20 hover:shadow-lg"
+      className: "bg-gradient-to-br from-purple-50 to-purple-100 hover:shadow-lg border-purple-200"
     },
     {
       title: "Still Review Pending",
       value: stillReviewPending,
       description: "awaiting review",
-      icon: AlertTriangle,
       trend: stillReviewPending > 0 ? "needs attention" : "all good",
-      className: "bg-gradient-to-br from-card to-warning/20 hover:shadow-lg",
+      className: "bg-gradient-to-br from-orange-50 to-orange-100 hover:shadow-lg border-orange-200",
       clickable: true as const,
     },
     {
       title: "Today's Follow-ups Due",
       value: todaysFollowupsKpi?.count || 0,
       description: todaysFollowupsKpi?.asOf ? `as of ${new Date(todaysFollowupsKpi.asOf).toLocaleString()}` : "due today",
-      icon: Calendar,
       trend: todaysFollowupsKpi?.count ? "requires action" : "all caught up",
-      className: "bg-gradient-to-br from-card to-orange-100 hover:shadow-lg",
+      className: "bg-gradient-to-br from-yellow-50 to-yellow-100 hover:shadow-lg border-yellow-200",
       clickable: true as const,
     },
     {
       title: "1st Follow-ups",
       value: firstFollowupKpi?.count || 0,
       description: firstFollowupKpi?.asOf ? `as of ${new Date(firstFollowupKpi.asOf).toLocaleString()}` : "loading...",
-      icon: Clock,
       trend: firstFollowupKpi ? "ready" : "loading",
-      className: "bg-gradient-to-br from-card to-blue-100 hover:shadow-lg",
+      className: "bg-gradient-to-br from-teal-50 to-teal-100 hover:shadow-lg border-teal-200",
       clickable: true as const,
     }
   ];
@@ -134,37 +137,32 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
           : "text-foreground";
 
         const isClickable = (kpi as any).clickable;
+        const isActive = activeKey === kpi.title;
         return (
           <Card
             key={index}
-            className={`transition-all duration-300 hover:scale-105 border-border/50 ${kpi.className} ${isClickable ? 'cursor-pointer' : ''}`}
+            className={`transition-all duration-300 hover:scale-105 border ${kpi.className} ${isClickable ? 'cursor-pointer' : ''} ${isActive ? 'ring-2 ring-offset-2 ring-current' : ''}`}
             onClick={() => {
               if (!isClickable) return;
+              setActiveKey(kpi.title);
               if (kpi.title === "Still Review Pending" && onReviewPendingClick) onReviewPendingClick();
               if (kpi.title === "Total Registrations" && onTotalClick) onTotalClick();
               if (kpi.title === "Today's Follow-ups Due" && onTodayDueClick) onTodayDueClick();
               if (kpi.title === "1st Follow-ups" && onFirstFollowupClick) onFirstFollowupClick();
+              if (kpi.title === "Registrations Today" && onRegistrationsTodayClick) onRegistrationsTodayClick();
             }}
           >
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardDescription className="text-muted-foreground text-sm font-medium">
-                    {kpi.title}
-                  </CardDescription>
-                  <CardTitle className={`text-3xl mt-2 ${valueClass}`}>
-                    {kpi.value.toLocaleString()}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {kpi.description}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end space-y-2">
-                  <kpi.icon className="h-8 w-8 text-primary opacity-80" />
-                  <span className="text-xs font-medium text-primary">
-                    {kpi.trend}
-                  </span>
-                </div>
+              <div>
+                <CardDescription className="text-muted-foreground text-sm font-medium">
+                  {kpi.title}
+                </CardDescription>
+                <CardTitle className={`text-3xl mt-2 ${valueClass}`}>
+                  {kpi.value.toLocaleString()}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {kpi.description}
+                </p>
               </div>
             </CardContent>
           </Card>
