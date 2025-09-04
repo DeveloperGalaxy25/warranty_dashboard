@@ -544,11 +544,16 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
       case 'warrantyCardSent':
         return (
           <td className="px-4 py-3 text-sm text-foreground">
-            {customer.WarrantyCardSent ? (
-              <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
-            ) : (
-              <span className="text-muted-foreground">-</span>
-            )}
+            {(() => {
+              const v: any = customer.WarrantyCardSent;
+              const asString = typeof v === 'string' ? v.trim() : '';
+              const isTrue = v === true || asString.toUpperCase() === 'TRUE' || asString.includes('✅') || asString.includes('✔');
+              return isTrue ? (
+                <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
+              ) : (
+                <span className="text-muted-foreground">-</span>
+              );
+            })()}
           </td>
         );
       case 'feedbackReceived':
