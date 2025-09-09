@@ -4,6 +4,7 @@ import {
   getBrandEmailConfig,
   generateEmailSubject 
 } from '@/templates/email-service/emailTemplates';
+import { getConfig } from './config';
 
 export interface EmailSendResult {
   success: boolean;
@@ -60,8 +61,14 @@ export class EmailService {
       const preview = this.generateWarrantyCardPreview(data);
       const brandConfig = getBrandEmailConfig(data.brand);
 
-      const base = (import.meta as any).env?.VITE_SHEETS_API_BASE as string;
-      const token = (import.meta as any).env?.VITE_SHEETS_API_TOKEN || '';
+      const getBase = () => {
+        const BASE = getConfig("SHEETS_API_BASE");
+        if (!BASE || !BASE.startsWith('https://script.google.com/macros/')) {
+          throw new Error('SHEETS_API_BASE missing or invalid. Check runtime configuration.');
+        }
+        return BASE;
+      };
+      const token = getConfig("SHEETS_API_TOKEN");
       
       // Prepare payload for Apps Script
       const payload = {
@@ -92,7 +99,7 @@ export class EmailService {
         body.append(key, typeof value === 'string' ? value : JSON.stringify(value));
       });
 
-      const response = await fetch(base, {
+      const response = await fetch(getBase(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -104,7 +111,13 @@ export class EmailService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
+      // Safe JSON parser that detects HTML responses
+      const text = await response.text();
+      if (text.trim().startsWith('<!DOCTYPE')) {
+        throw new Error(`Non-JSON response (HTML): ${text.slice(0, 200)}`);
+      }
+      let result: any;
+      try { result = JSON.parse(text); } catch (e) { throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`); }
       
       if (result.success) {
         return {

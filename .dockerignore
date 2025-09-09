@@ -1,0 +1,27 @@
+# Ignore everything except what we need
+*
+
+# Allow these files and directories
+!package*.json
+!src/
+!public/
+!index.html
+!vite.config.ts
+!tailwind.config.*
+!postcss.config.js
+!tsconfig*.json
+!components.json
+!Dockerfile
+!nginx.conf
+
+# Ignore these
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+*.log
+.DS_Store
+.vscode
+.idea

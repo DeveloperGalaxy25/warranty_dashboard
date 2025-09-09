@@ -5,8 +5,13 @@ COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 # Copy the rest of the app (includes .env.production)
 COPY . .
-# Build static assets; Vite will read .env.production
-RUN npm run build
+# Build-time vars for Vite
+ARG VITE_SHEETS_API_BASE
+ARG VITE_SHEETS_API_TOKEN
+ENV VITE_SHEETS_API_BASE=${VITE_SHEETS_API_BASE}
+ENV VITE_SHEETS_API_TOKEN=${VITE_SHEETS_API_TOKEN}
+# Build static assets; Vite will read envs above or .env.production
+RUN echo "Building with VITE_SHEETS_API_BASE=$VITE_SHEETS_API_BASE" && npm run build
 
 FROM nginx:stable-alpine
 # Copy build output

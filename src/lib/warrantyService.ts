@@ -1,7 +1,31 @@
 // Sheets-based service using Apps Script Web App
-// Standardize to VITE_SHEETS_API_BASE only
-const BASE: string = (import.meta as any).env?.VITE_SHEETS_API_BASE as string;
-const TOKEN = (import.meta as any).env?.VITE_SHEETS_API_TOKEN || "";
+// Use runtime configuration loaded from /config.json
+import { getConfig } from './config';
+
+function getBase(): string {
+  const BASE = getConfig("SHEETS_API_BASE");
+  if (!BASE || !BASE.startsWith('https://script.google.com/macros/')) {
+    throw new Error('SHEETS_API_BASE missing or invalid. Check runtime configuration.');
+  }
+  return BASE;
+}
+
+function getToken(): string {
+  return getConfig("SHEETS_API_TOKEN");
+}
+
+// Safe JSON parser that detects HTML responses
+async function safeJsonParse(response: Response): Promise<any> {
+  const text = await response.text();
+  if (text.trim().startsWith('<!DOCTYPE')) {
+    throw new Error(`Non-JSON response (HTML): ${text.slice(0, 200)}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+  }
+}
 
 export const getWarranties = async (filters?: {
   brand?: string;
@@ -14,10 +38,10 @@ export const getWarranties = async (filters?: {
   if (filters?.startDate) params.set("start", filters.startDate);
   if (filters?.endDate) params.set("end", filters.endDate);
 
-  const url = `${BASE}?${params.toString()}`;
+  const url = `${getBase()}?${params.toString()}`;
   const res = await fetch(url, { method: "GET" });
   if (!res.ok) throw new Error(`Failed to fetch warranties: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return json.data as any[];
 };
@@ -28,7 +52,7 @@ export const updateWarrantyStatus = async (
   agent: string
 ) => {
   const payload: Record<string, string | undefined> = {
-    token: TOKEN || undefined,
+    token: getToken() || undefined,
     warrantyId,
     status: updates.status,
     remark: updates.lastRemark,
@@ -43,13 +67,13 @@ export const updateWarrantyStatus = async (
     if (v !== undefined && v !== null) body.append(k, String(v));
   });
 
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body,
   });
   if (!res.ok) throw new Error(`Failed to update warranty: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return json.data;
 };
@@ -61,29 +85,29 @@ export const updateWarrantyStatus = async (
 async function apiPostJson<T = any>(payload: Record<string, any>): Promise<T> {
   // Send payload as form-encoded to avoid preflight
   const body = new URLSearchParams();
-  body.append("token", TOKEN);
+  body.append("token", getToken());
   Object.entries(payload).forEach(([key, value]) => {
     // Preserve field names; stringify non-primitives
     body.append(key, typeof value === "string" ? value : JSON.stringify(value));
   });
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
     body,
   });
   if (!res.ok) throw new Error(`API POST failed: ${res.status}`);
-  return (await res.json()) as T;
+  return (await safeJsonParse(res)) as T;
 }
 
 async function apiGetJson<T = any>(params: Record<string, any>): Promise<T> {
   const search = new URLSearchParams();
-  Object.entries({ token: TOKEN || undefined, ...params }).forEach(([k, v]) => {
+  Object.entries({ token: getToken() || undefined, ...params }).forEach(([k, v]) => {
     if (v !== undefined && v !== null) search.append(k, String(v));
   });
-  const url = `${BASE}?${search.toString()}`;
+  const url = `${getBase()}?${search.toString()}`;
   const res = await fetch(url, { method: 'GET' });
   if (!res.ok) throw new Error(`API GET failed: ${res.status}`);
-  return (await res.json()) as T;
+  return (await safeJsonParse(res)) as T;
 }
 
 // Apps Script-backed: Append a row into WorkFlow_Log
@@ -100,7 +124,7 @@ export const logFollowUpAction = async (
   updatedBy: string = "Dashboard"
 ): Promise<{ success: boolean }> => {
   const body = new URLSearchParams();
-  body.append("token", TOKEN);
+  body.append("token", getToken());
   body.append("action", "logFollowUpAction");
   body.append("warrantyId", warrantyId);
   body.append("customerName", customerName);
@@ -113,13 +137,13 @@ export const logFollowUpAction = async (
   body.append("assignedTo", assignedTo);
   body.append("updatedBy", updatedBy);
 
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body,
   });
   if (!res.ok) throw new Error(`Failed to log follow-up: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return { success: true };
 };
@@ -131,7 +155,7 @@ export const markReviewDone = async (
   updatedBy: string = "Dashboard"
 ): Promise<{ success: boolean }> => {
   const body = new URLSearchParams();
-  body.append("token", TOKEN);
+  body.append("token", getToken());
   body.append("action", "updateReviewAndTriggerCard");
   body.append("warrantyId", warrantyId);
   body.append("reviewDone", "true");
@@ -139,13 +163,13 @@ export const markReviewDone = async (
   if (reviewRemark) body.append("remarks", reviewRemark);
   body.append("updatedBy", updatedBy);
 
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body,
   });
   if (!res.ok) throw new Error(`Failed to mark review done: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return { success: true };
 };
@@ -157,7 +181,7 @@ export const updateBooleanFlags = async (
   agent: string
 ) => {
   const body = new URLSearchParams();
-  body.append("token", TOKEN);
+  body.append("token", getToken());
   body.append("action", "updateBooleanFlags");
   body.append("warrantyId", warrantyId);
   if (flags.WarrantyCardSent !== undefined) body.append("WarrantyCardSent", String(flags.WarrantyCardSent));
@@ -165,13 +189,13 @@ export const updateBooleanFlags = async (
   if (flags.ExtendedWarrantySent !== undefined) body.append("ExtendedWarrantySent", String(flags.ExtendedWarrantySent));
   body.append("updatedBy", agent);
 
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body,
   });
   if (!res.ok) throw new Error(`Failed to update flags: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return json.data;
 };
@@ -264,19 +288,19 @@ export const updateFollowUpStatus = async (
   followUp3Date?: string; 
 }> => {
   const body = new URLSearchParams();
-  body.append("token", TOKEN);
+  body.append("token", getToken());
   body.append("action", "updateFollowUpStatus");
   body.append("warrantyId", data.warrantyId);
   if (data.followUp1Remark) body.append("followUp1Remark", data.followUp1Remark);
   body.append("updatedBy", "Dashboard");
 
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body,
   });
   if (!res.ok) throw new Error(`Failed to update follow-up status: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return json;
 };
@@ -296,20 +320,20 @@ export const markFollowUp = async (
   followUp3Date?: string; 
 }> => {
   const body = new URLSearchParams();
-  body.append("token", TOKEN);
+  body.append("token", getToken());
   body.append("action", "markFollowUp");
   body.append("warrantyId", warrantyId);
   body.append("followUpNo", String(followUpNo));
   body.append("remark", remark);
   body.append("updatedBy", "Dashboard");
 
-  const res = await fetch(BASE, {
+  const res = await fetch(getBase(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body,
   });
   if (!res.ok) throw new Error(`Failed to mark follow-up: ${res.status}`);
-  const json = await res.json();
+  const json = await safeJsonParse(res);
   if (!json?.success) throw new Error(json?.error || "Unknown API error");
   return json;
 };
