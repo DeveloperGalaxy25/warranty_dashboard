@@ -271,6 +271,12 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
             <span className="text-sm text-muted-foreground">Email</span>
             <p className="font-medium break-all">{customer.email || '-'}</p>
           </div>
+          {customer.orderId ? (
+            <div>
+              <span className="text-sm text-muted-foreground">Order ID</span>
+              <p className="font-medium break-all">{customer.orderId}</p>
+            </div>
+          ) : null}
           <div>
             <span className="text-sm text-muted-foreground">Phone</span>
             <p className="font-medium">{customer.phone || '-'}</p>

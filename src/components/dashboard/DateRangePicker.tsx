@@ -38,16 +38,17 @@ const presetRanges = {
     const end = endOfDay(yesterday);
     return { from: start, to: end };
   },
+  // Inclusive presets (e.g., Last 7 days includes today and 6 previous full days)
   "7days": () => ({
-    from: startOfDay(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+    from: startOfDay(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)),
     to: endOfDay(new Date())
   }),
   "30days": () => ({
-    from: startOfDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+    from: startOfDay(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)),
     to: endOfDay(new Date())
   }),
   "90days": () => ({
-    from: startOfDay(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+    from: startOfDay(new Date(Date.now() - 89 * 24 * 60 * 60 * 1000)),
     to: endOfDay(new Date())
   }),
   "custom": () => null
@@ -81,19 +82,18 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   };
 
   const formatDateRange = (range: DateRange) => {
-    const today = new Date();
-    const isToday = range.to.toDateString() === today.toDateString();
-    
-    if (isToday) {
-      const diffTime = Math.abs(today.getTime() - range.from.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 1) return "Today";
-      if (diffDays <= 7) return "Last 7 days";
-      if (diffDays <= 30) return "Last 30 days";
-      if (diffDays <= 90) return "Last 90 days";
+    const today = startOfDay(new Date());
+    const from = startOfDay(range.from);
+    const to = startOfDay(range.to);
+    const days = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; // inclusive
+
+    if (to.getTime() === today.getTime()) {
+      if (days === 1) return "Today";
+      if (days === 7) return "Last 7 days";
+      if (days === 30) return "Last 30 days";
+      if (days === 90) return "Last 90 days";
     }
-    
+
     return `${range.from.toLocaleDateString()} - ${range.to.toLocaleDateString()}`;
   };
 
