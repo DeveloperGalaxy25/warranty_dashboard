@@ -140,6 +140,24 @@ const useFollowUpSummaries = () => {
     }
   };
 
+  // Batch-fetch summaries for multiple warranty IDs at once
+  const fetchSummariesBatch = async (warrantyIds: string[]) => {
+    const ids = Array.from(new Set(warrantyIds.filter(Boolean)));
+    const pendingIds = ids.filter(id => !summaries[id] && !loading[id]);
+    if (pendingIds.length === 0) return;
+    // Mark all as loading to prevent duplicate calls while in-flight
+    setLoading(prev => pendingIds.reduce((acc, id) => ({ ...acc, [id]: true }), { ...prev }));
+    try {
+      const { getFollowupSummaryBatch } = await import('@/lib/warrantyService');
+      const results = await getFollowupSummaryBatch(pendingIds);
+      setSummaries(prev => ({ ...prev, ...results } as any));
+    } catch (error) {
+      console.error('Failed to batch fetch follow-up summaries:', error);
+    } finally {
+      setLoading(prev => pendingIds.reduce((acc, id) => ({ ...acc, [id]: false }), { ...prev }));
+    }
+  };
+
   const refreshSummary = async (warrantyId: string) => {
     setSummaries(prev => {
       const { [warrantyId]: removed, ...rest } = prev;
@@ -148,7 +166,7 @@ const useFollowUpSummaries = () => {
     await fetchSummary(warrantyId);
   };
 
-  return { summaries, loading, fetchSummary, refreshSummary };
+  return { summaries, loading, fetchSummary, fetchSummariesBatch, refreshSummary };
 };
 
 const BrandBadge = ({ brand }: { brand: Customer['Brand'] }) => {
@@ -356,7 +374,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
   const { columnPrefs, toggleColumn, resetToDefaults } = useColumnPrefs();
 
   // Follow-up summaries
-  const { summaries, loading, fetchSummary, refreshSummary } = useFollowUpSummaries();
+  const { summaries, loading, fetchSummary, fetchSummariesBatch, refreshSummary } = useFollowUpSummaries();
 
   // Column filters state
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
@@ -381,15 +399,16 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
   // Reset to page 1 when list length changes (e.g., filters)
   React.useEffect(() => { setPage(1); }, [customers.length]);
 
-  // Fetch follow-up summaries for visible customers
+  // Fetch follow-up summaries for visible customers (batched)
   React.useEffect(() => {
     const visibleCustomers = customers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    visibleCustomers.forEach(customer => {
-      if (!customer.FeedbackReceived) {
-        fetchSummary(customer.WarrantyID);
-      }
-    });
-  }, [customers, page, fetchSummary]);
+    const idsToFetch = visibleCustomers
+      .filter(c => !c.FeedbackReceived)
+      .map(c => c.WarrantyID);
+    if (idsToFetch.length > 0) {
+      fetchSummariesBatch(idsToFetch);
+    }
+  }, [customers, page, fetchSummariesBatch]);
 
   // Apply column filters
   const filteredCustomers = React.useMemo(() => {

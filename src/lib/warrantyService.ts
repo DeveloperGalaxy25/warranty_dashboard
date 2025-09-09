@@ -231,9 +231,59 @@ export type FollowUpSummary = {
   nextDue: string | null | string;
 };
 
+// Lightweight in-memory cache + request de-duplication for follow-up summaries
+const FOLLOWUP_SUMMARY_TTL_MS = 60_000; // 1 minute TTL to avoid stale UI
+const followupSummaryCache = new Map<string, { value: FollowUpSummary; expires: number }>();
+const inflightBatchRequests = new Map<string, Promise<Record<string, FollowUpSummary>>>();
+
 export const getFollowupSummaryBatch = async (ids: string[]): Promise<Record<string, FollowUpSummary>> => {
   if (ids.length === 0) return {};
-  return apiGetJson({ action: 'summaryBatch', ids: ids.join(',') }) as Promise<Record<string, FollowUpSummary>>;
+
+  // Split into cache hits and misses based on TTL
+  const now = Date.now();
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  const cachedPart: Record<string, FollowUpSummary> = {};
+  const missingIds: string[] = [];
+
+  uniqueIds.forEach((id) => {
+    const entry = followupSummaryCache.get(id);
+    if (entry && entry.expires > now) {
+      cachedPart[id] = entry.value;
+    } else {
+      missingIds.push(id);
+    }
+  });
+
+  if (missingIds.length === 0) {
+    return cachedPart;
+  }
+
+  // Use a stable key for de-duplicating concurrent batch requests
+  const key = missingIds.slice().sort().join(',');
+  let pending = inflightBatchRequests.get(key);
+  if (!pending) {
+    pending = apiGetJson({ action: 'summaryBatch', ids: missingIds.join(',') }) as Promise<Record<string, FollowUpSummary>>;
+    inflightBatchRequests.set(key, pending);
+  }
+
+  try {
+    const fetched = await pending;
+    // Populate cache with fresh results
+    const expiry = Date.now() + FOLLOWUP_SUMMARY_TTL_MS;
+    Object.entries(fetched || {}).forEach(([id, summary]) => {
+      followupSummaryCache.set(id, { value: summary as FollowUpSummary, expires: expiry });
+    });
+    // Merge cachedPart with fetched subset for requested ids only
+    const result: Record<string, FollowUpSummary> = { ...cachedPart };
+    missingIds.forEach((id) => {
+      if (fetched && fetched[id]) {
+        result[id] = fetched[id] as FollowUpSummary;
+      }
+    });
+    return result;
+  } finally {
+    inflightBatchRequests.delete(key);
+  }
 };
 
 export const getFollowupSummary = async (warrantyId: string): Promise<FollowUpSummary> => {
