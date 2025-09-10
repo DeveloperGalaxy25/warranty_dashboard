@@ -796,39 +796,41 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
           </div>
         )}
 
-        <CardContent className="p-0">
-          <div className="overflow-y-auto max-h-[600px]">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px]">
-                <thead className="bg-muted/50 border-b border-border sticky top-0 z-20">
-                  <tr>
-                    {columnPrefs.order.map(columnId => (
-                      <React.Fragment key={columnId}>
-                        {renderTableHeader(columnId)}
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {pageItems.map((customer, index) => (
-                    <tr 
-                      key={customer.WarrantyID}
-                      className={`hover:bg-accent/30 cursor-pointer transition-colors ${
-                        index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
-                      }`}
-                      onClick={() => onCustomerClick(customer)}
-                    >
-                      {columnPrefs.order.map(columnId => (
-                        <React.Fragment key={columnId}>
-                          {renderTableCell(customer, columnId)}
-                        </React.Fragment>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+    <CardContent className="p-0">
+      {/* Scrollable container with fixed height */}
+      <div className="max-h-[600px] overflow-y-auto">
+        <table className="w-full min-w-[1200px] border-collapse">
+          <thead>
+            <tr>
+              {columnPrefs.order.map(columnId => (
+                <th
+                  key={columnId}
+                  className="sticky top-0 bg-muted/50 z-20 px-4 py-3 text-left text-sm font-semibold text-foreground border-b border-border"
+                >
+                  {renderTableHeader(columnId)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {pageItems.map((customer, index) => (
+              <tr
+                key={customer.WarrantyID}
+                className={`hover:bg-accent/30 cursor-pointer transition-colors ${
+                  index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                }`}
+                onClick={() => onCustomerClick(customer)}
+              >
+                {columnPrefs.order.map(columnId => (
+                  <React.Fragment key={columnId}>
+                    {renderTableCell(customer, columnId)}
+                  </React.Fragment>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
           {customers.length === 0 && (
             <div className="text-center py-12">
