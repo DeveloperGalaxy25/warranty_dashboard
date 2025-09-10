@@ -797,7 +797,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         )}
 
         <CardContent className="p-0">
-          <div className="overflow-hidden">
+          <div className="overflow-x-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1200px]">
                 <thead className="bg-muted/50 border-b border-border sticky top-0 z-10">
