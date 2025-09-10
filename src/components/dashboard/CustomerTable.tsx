@@ -797,10 +797,10 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         )}
 
         <CardContent className="p-0">
-          <div className="overflow-x-hidden">
+          <div className="overflow-y-auto max-h-[600px]">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1200px]">
-                <thead className="bg-muted/50 border-b border-border sticky top-0 z-10">
+                <thead className="bg-muted/50 border-b border-border sticky top-0 z-20">
                   <tr>
                     {columnPrefs.order.map(columnId => (
                       <React.Fragment key={columnId}>
