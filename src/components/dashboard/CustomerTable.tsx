@@ -805,7 +805,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
               {columnPrefs.order.map(columnId => (
                 <th
                   key={columnId}
-                  className="sticky top-0 bg-muted/50 z-20 px-4 py-3 text-left text-sm font-semibold text-foreground border-b border-border"
+                  className="sticky top-0 bg-muted z-20 px-4 py-3 text-left text-sm font-semibold text-foreground border-b border-border"
                 >
                   {renderTableHeader(columnId)}
                 </th>
