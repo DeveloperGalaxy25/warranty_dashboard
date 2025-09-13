@@ -800,7 +800,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
       {/* Scrollable container with fixed height */}
           <div className="max-h-[600px] overflow-y-auto">
       <table className="w-full min-w-[1200px] border-collapse">
-        <thead className="sticky top-0 z-20 bg-muted">
+        <thead className="sticky top-0 z-20 bg-muted bg-opacity-100">
           <tr>
             {columnPrefs.order.map(columnId => (
               <th
