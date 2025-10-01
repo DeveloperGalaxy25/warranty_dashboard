@@ -56,11 +56,38 @@ const presetRanges = {
 
 export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState("30days");
   const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
 
+  // Function to detect which preset matches the current date range
+  const detectPreset = (range: DateRange): string => {
+    const today = startOfDay(new Date());
+    const from = startOfDay(range.from);
+    const to = startOfDay(range.to);
+    const days = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; // inclusive
+
+    if (to.getTime() === today.getTime()) {
+      if (days === 1) return "today";
+      if (days === 7) return "7days";
+      if (days === 30) return "30days";
+      if (days === 90) return "90days";
+    }
+
+    // Check if it's yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStart = startOfDay(yesterday);
+    const yesterdayEnd = endOfDay(yesterday);
+    
+    if (from.getTime() === yesterdayStart.getTime() && to.getTime() === yesterdayEnd.getTime()) {
+      return "yesterday";
+    }
+
+    return "custom";
+  };
+
+  const selectedPreset = detectPreset(value);
+
   const handlePresetChange = (preset: string) => {
-    setSelectedPreset(preset);
     if (preset !== "custom") {
       const range = presetRanges[preset as keyof typeof presetRanges]();
       if (range) {
