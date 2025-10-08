@@ -5,9 +5,13 @@ import { CustomerTable } from "./dashboard/CustomerTable";
 import { StatusUpdateModal } from "./dashboard/StatusUpdateModal";
 import { useWarrantyData, type WarrantyRecord } from "@/hooks/useWarrantyData";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { LogOut, User, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { getFirstFollowups, getTodaysFollowups, evaluate24NRY } from "@/lib/warrantyService";
 import { KpiSkeleton } from "./KpiSkeleton";
 import { TableSkeleton } from "./TableSkeleton";
+import { authManager } from "@/lib/auth";
 
 export type DateRange = { from: Date; to: Date };
 
@@ -82,6 +86,7 @@ const WarrantyDashboard: React.FC = () => {
   const [firstFollowupsData, setFirstFollowupsData] = useState<Customer[]>([]);
   const [todaysFollowupsData, setTodaysFollowupsData] = useState<Customer[]>([]);
   const [kpiResetVersion, setKpiResetVersion] = useState<number>(0);
+  const [userEmail, setUserEmail] = useState<string>("");
 
   const { data, loading, error } = useWarrantyData({
     brand: brand === "All" ? undefined : brand,
@@ -96,6 +101,11 @@ const WarrantyDashboard: React.FC = () => {
   // Call evaluate24NRY on app load (fire-and-forget)
   useEffect(() => {
     evaluate24NRY();
+  }, []);
+
+  // Load user email on component mount
+  useEffect(() => {
+    setUserEmail(authManager.getUserEmail() || "");
   }, []);
 
   const customers: Customer[] = useMemo(() => {
@@ -196,6 +206,11 @@ const WarrantyDashboard: React.FC = () => {
     setFirstFollowupsData([]);
     setTodaysFollowupsData([]);
     setKpiResetVersion(v => v + 1);
+  };
+
+  const handleLogout = () => {
+    authManager.logout();
+    window.location.reload();
   };
 
   const handleFirstFollowupClick = async () => {
@@ -328,6 +343,33 @@ const WarrantyDashboard: React.FC = () => {
                 setActiveWarrantyFilter(searchId.trim());
               }}
             >Search</button>
+          </div>
+          {/* User logo and dropdown */}
+          <div className="flex items-center border-l pl-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2 h-10 w-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white p-0"
+                >
+                  <span className="text-lg font-bold">
+                    {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <div className="px-3 py-2">
+                  <p className="text-sm font-medium text-gray-900">Signed in as</p>
+                  <p className="text-sm text-gray-600 truncate">{userEmail}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

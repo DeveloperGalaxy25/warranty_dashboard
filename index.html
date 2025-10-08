@@ -22,53 +22,7 @@
   </head>
 
   <body>
-    <div id="login-section">
-      <p>Please sign in with your @galaxyinc.in account:</p>
-      <div id="g_id_onload"
-           data-client_id="902896635203-c905kjbs3dnk6fu5flktclq6d7kdgk09.apps.googleusercontent.com"
-           data-context="signin"
-           data-ux_mode="popup"
-           data-callback="handleCredentialResponse"
-           data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin" data-type="standard"></div>
-    </div>
-
-    <div id="dashboard" style="display:none;">
-      <div id="root"></div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-
-    <script>
-      function parseJwt(token) {
-        try {
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join(''));
-          return JSON.parse(jsonPayload);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      function handleCredentialResponse(response) {
-        try {
-          const payload = parseJwt(response && response.credential ? response.credential : '');
-          const email = payload && payload.email ? String(payload.email).toLowerCase() : '';
-          if (email.endsWith('@galaxyinc.in')) {
-            const loginSection = document.getElementById('login-section');
-            const dashboardSection = document.getElementById('dashboard');
-            if (loginSection) loginSection.style.display = 'none';
-            if (dashboardSection) dashboardSection.style.display = '';
-          } else {
-            alert('Access denied. Use your @galaxyinc.in account');
-          }
-        } catch (err) {
-          alert('Authentication failed. Please try again.');
-        }
-      }
-    </script>
   </body>
 </html>

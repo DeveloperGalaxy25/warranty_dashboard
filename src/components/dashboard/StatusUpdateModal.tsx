@@ -3,11 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, Clock, User } from "lucide-react";
+import { Check, Clock, User, Loader2, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { WarrantyRecord } from "@/hooks/useWarrantyData";
 import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus, markFollowUp, getFollowupState } from "@/lib/warrantyService";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface StatusUpdateModalProps {
   customer: WarrantyRecord;
@@ -67,10 +68,12 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
     followUp3Disabled: false
   });
   const [loading, setLoading] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [followUpSummary, setFollowUpSummary] = useState<FollowUpSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [followUpHistory, setFollowUpHistory] = useState<FollowUpHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const { toast } = useToast();
 
   const isReviewCompleted = Boolean(customer?.status === "Review Won" || customer?.status === "Closed" || customer?.status === "Completed");
 
@@ -81,6 +84,8 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
       loadFollowupState();
       // Prefill basic: if we ever store summary server-side, fetch it here
       setFollowUpSummary((prev) => prev || { count: 0, stages: [], latest: null, nextDue: null });
+      // Reset success state when modal opens
+      setSaveSuccess(false);
     }
   }, [isOpen, customer]);
 
@@ -90,7 +95,8 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
     try {
       const state = await getFollowupState(customer.warrantyId);
       
-      setFollowUpData({
+      setFollowUpData(prev => ({
+        ...prev,
         followUp1Done: state.followUp1.done,
         followUp1Remark: state.followUp1.remark,
         followUp1Timestamp: state.followUp1.timestamp,
@@ -103,7 +109,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
         followUp1Disabled: state.followUp1.done,
         followUp2Disabled: state.followUp2.done,
         followUp3Disabled: state.followUp3.done
-      });
+      }));
     } catch (error) {
       console.error('Failed to load follow-up state:', error);
     }
@@ -127,6 +133,8 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
   const handleSave = async () => {
     try {
       setLoading(true);
+      setSaveSuccess(false);
+      
       if (reviewDone) {
         await markReviewDone(customer.warrantyId, remark);
         setFollowUpSummary({ count: 3, stages: [1,2,3], latest: new Date().toISOString().slice(0,10), nextDue: null });
@@ -217,12 +225,30 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
           throw new Error("No changes to save");
         }
       }
+      
+      // Show success state
+      setSaveSuccess(true);
+      toast({
+        title: "Success",
+        description: "Update saved successfully",
+        duration: 3000,
+      });
+      
+      // Refresh only the table data, not the entire dashboard
       onUpdate();
-      onClose();
-      // @ts-ignore
-      if (window?.toast) window.toast.success("Update saved successfully"); else alert("Update saved successfully");
+      
+      // Close modal after a short delay to show success state
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+      
     } catch (e) {
-      alert(`Failed to save: ${e instanceof Error ? e.message : "Unknown error"}`);
+      toast({
+        title: "Error",
+        description: `Failed to save: ${e instanceof Error ? e.message : "Unknown error"}`,
+        variant: "destructive",
+        duration: 5000,
+      });
     } finally {
       setLoading(false);
     }
@@ -498,11 +524,23 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
           </div>
 
           <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={loading || !hasChanges()}>
-              {loading ? "Saving..." : "Save"}
+            <Button onClick={handleSave} disabled={loading || !hasChanges() || saveSuccess}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : saveSuccess ? (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                  Saved!
+                </>
+              ) : (
+                "Save"
+              )}
             </Button>
           </div>
         </div>
