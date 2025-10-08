@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -56,17 +56,58 @@ const presetRanges = {
 
 export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState("30days");
   const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
+  const [explicitCustomSelection, setExplicitCustomSelection] = useState(false);
+
+  // Function to detect which preset matches the current date range
+  const detectPreset = (range: DateRange): string => {
+    const today = startOfDay(new Date());
+    const from = startOfDay(range.from);
+    const to = startOfDay(range.to);
+    const days = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; // inclusive
+
+    // Check if it's yesterday first (before checking today-based ranges)
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStart = startOfDay(yesterday);
+    const yesterdayEnd = startOfDay(yesterday); // Compare at same time level
+    
+    if (from.getTime() === yesterdayStart.getTime() && to.getTime() === yesterdayEnd.getTime()) {
+      return "yesterday";
+    }
+
+    if (to.getTime() === today.getTime()) {
+      if (days === 1) return "today";
+      if (days === 7) return "7days";
+      if (days === 30) return "30days";
+      if (days === 90) return "90days";
+    }
+
+    return "custom";
+  };
+
+  const selectedPreset = explicitCustomSelection ? "custom" : detectPreset(value);
+
+  // Sync customRange state with the current value
+  useEffect(() => {
+    setCustomRange(value);
+  }, [value]);
 
   const handlePresetChange = (preset: string) => {
-    setSelectedPreset(preset);
     if (preset !== "custom") {
       const range = presetRanges[preset as keyof typeof presetRanges]();
       if (range) {
         onChange(range);
+        // Update customRange state to reflect the current range
+        setCustomRange(range);
+        setExplicitCustomSelection(false); // Reset custom selection
         setIsOpen(false);
       }
+    } else {
+      // When "custom" is selected, keep the popover open to show the calendar
+      // Don't close the popover, just ensure customRange is set to current value
+      setCustomRange(value);
+      setExplicitCustomSelection(true); // Mark as explicit custom selection
     }
   };
 
@@ -75,6 +116,7 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
       const normalized = { from: startOfDay(range.from), to: endOfDay(range.to) };
       setCustomRange(normalized);
       onChange(normalized as { from: Date; to: Date });
+      setExplicitCustomSelection(false); // Reset custom selection after actual selection
       setIsOpen(false);
     } else {
       setCustomRange(range || {});
@@ -137,7 +179,7 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
                 mode="range"
                 selected={(customRange.from || customRange.to) ? { from: customRange.from as Date | undefined, to: customRange.to as Date | undefined } : undefined}
                 onSelect={handleCustomRangeSelect}
-                numberOfMonths={2}
+                numberOfMonths={1}
                 className={cn("p-3 pointer-events-auto")}
               />
             </div>
