@@ -29,6 +29,7 @@ export interface Customer {
   Email: string;
   Mobile: string;
   Product: string;
+  SKU?: string;
   Status: string;
   status?: string;
   LastRemark: string;
@@ -67,8 +68,11 @@ function toDate(value: unknown): Date | null {
 function startOfDay(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 function endOfDay(d: Date): Date { const e = new Date(d.getFullYear(), d.getMonth(), d.getDate()); e.setHours(23,59,59,999); return e; }
 
+// Enforce global cutoff: do not show data before 2025-09-01
+const GLOBAL_CUTOFF = startOfDay(new Date('2025-09-01'));
+
 const defaultRange: DateRange = {
-  from: startOfDay(new Date(Date.now() - 730 * 24 * 60 * 60 * 1000)),
+  from: startOfDay(new Date()),
   to: endOfDay(new Date()),
 };
 
@@ -82,16 +86,21 @@ const WarrantyDashboard: React.FC = () => {
   const [showReviewPendingOnly, setShowReviewPendingOnly] = useState<boolean>(false);
   const [showTodayDueOnly, setShowTodayDueOnly] = useState<boolean>(false);
   const [showFirstFollowupsOnly, setShowFirstFollowupsOnly] = useState<boolean>(false);
+  const [showCompletedOnly, setShowCompletedOnly] = useState<boolean>(false);
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
   const [firstFollowupsData, setFirstFollowupsData] = useState<Customer[]>([]);
   const [todaysFollowupsData, setTodaysFollowupsData] = useState<Customer[]>([]);
   const [kpiResetVersion, setKpiResetVersion] = useState<number>(0);
   const [userEmail, setUserEmail] = useState<string>("");
 
+  // Ensure startDate respects the global cutoff regardless of selected range
+  const effectiveFrom = range.from < GLOBAL_CUTOFF ? GLOBAL_CUTOFF : range.from;
+  const effectiveTo = range.to;
+
   const { data, loading, error } = useWarrantyData({
     brand: brand === "All" ? undefined : brand,
-    startDate: range.from.toISOString(),
-    endDate: range.to.toISOString(),
+    startDate: effectiveFrom.toISOString(),
+    endDate: effectiveTo.toISOString(),
     // include refreshVersion so refetch occurs after save
     // (the hook stringifies filters; adding this will change the key)
     // @ts-ignore
@@ -117,14 +126,15 @@ const WarrantyDashboard: React.FC = () => {
       return {
         id: w.id,
         WarrantyID: w.warrantyId || (w as any).WarrantyID || w.id,
-        Timestamp: tsDate ? tsDate.toISOString() : "",
-        timestamp: tsDate ? tsDate.toISOString() : "",
+        Timestamp: tsDate ? tsDate : "",
+        timestamp: tsDate ? tsDate : "",
         Brand: w.brand || (w as any).Brand || "",
         brand: w.brand || "",
         CustomerName: w.customerName || (w as any).CustomerName || "",
         Email: w.email || (w as any).Email || "",
         Mobile: w.phone || (w as any).Mobile || "",
         Product: w.product || (w as any).Product || "",
+        SKU: (w as any).sku ?? (w as any).SKU ?? '',
         WarrantyCardSent: (w as any).warrantyCardSent ?? (w as any).WarrantyCardSent ?? false,
         FeedbackReceived: (w as any).feedbackReceived ?? (w as any).FeedbackReceived ?? false,
         ExtendedWarrantySent: (w as any).extendedWarrantySent ?? (w as any).ExtendedWarrantySent ?? false,
@@ -143,7 +153,8 @@ const WarrantyDashboard: React.FC = () => {
     return customers.filter((c) => {
       const d = toDate(c.Timestamp) || toDate(c.timestamp);
       if (!d) return true;
-      return d >= range.from && d <= range.to;
+      const from = range.from < GLOBAL_CUTOFF ? GLOBAL_CUTOFF : range.from;
+      return d >= from && d <= range.to;
     });
   }, [customers, range]);
 
@@ -203,6 +214,7 @@ const WarrantyDashboard: React.FC = () => {
     setShowReviewPendingOnly(false);
     setShowTodayDueOnly(false);
     setShowFirstFollowupsOnly(false);
+    setShowCompletedOnly(false);
     setFirstFollowupsData([]);
     setTodaysFollowupsData([]);
     setKpiResetVersion(v => v + 1);
@@ -224,8 +236,8 @@ const WarrantyDashboard: React.FC = () => {
         return {
           id: w.id,
           WarrantyID: w.warrantyId || w.WarrantyID || w.id,
-          Timestamp: tsDate ? tsDate.toISOString() : "",
-          timestamp: tsDate ? tsDate.toISOString() : "",
+          Timestamp: tsDate ? tsDate : "",
+          timestamp: tsDate ? tsDate : "",
           Brand: w.brand || w.Brand || "",
           brand: w.brand || "",
           CustomerName: w.customerName || w.CustomerName || "",
@@ -243,6 +255,9 @@ const WarrantyDashboard: React.FC = () => {
           PurchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
           purchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
         } as Customer;
+      }).filter((item: any) => {
+        const d = toDate(item.Timestamp) || toDate(item.timestamp);
+        return !d || d >= GLOBAL_CUTOFF;
       });
       setFirstFollowupsData(mappedData);
       setShowFirstFollowupsOnly(true);
@@ -264,8 +279,8 @@ const WarrantyDashboard: React.FC = () => {
         return {
           id: w.id,
           WarrantyID: w.warrantyId || w.WarrantyID || w.id,
-          Timestamp: tsDate ? tsDate.toISOString() : "",
-          timestamp: tsDate ? tsDate.toISOString() : "",
+          Timestamp: tsDate ? tsDate : "",
+          timestamp: tsDate ? tsDate : "",
           Brand: w.brand || w.Brand || "",
           brand: w.brand || "",
           CustomerName: w.customerName || w.CustomerName || "",
@@ -283,6 +298,9 @@ const WarrantyDashboard: React.FC = () => {
           PurchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
           purchasedFrom: w.purchasedFrom || w.PurchasedFrom || "",
         } as Customer;
+      }).filter((item: any) => {
+        const d = toDate(item.Timestamp) || toDate(item.timestamp);
+        return !d || d >= GLOBAL_CUTOFF;
       });
       setTodaysFollowupsData(mappedData);
       setShowTodayDueOnly(true);
@@ -329,6 +347,7 @@ const WarrantyDashboard: React.FC = () => {
                   setShowReviewPendingOnly(false);
                   setShowTodayDueOnly(false);
                   setShowFirstFollowupsOnly(false);
+                setShowCompletedOnly(false);
                   const v = searchId.trim();
                   setActiveWarrantyFilter(v);
                 }
@@ -340,6 +359,7 @@ const WarrantyDashboard: React.FC = () => {
                 setShowReviewPendingOnly(false);
                 setShowTodayDueOnly(false);
                 setShowFirstFollowupsOnly(false);
+                setShowCompletedOnly(false);
                 setActiveWarrantyFilter(searchId.trim());
               }}
             >Search</button>
@@ -384,12 +404,14 @@ const WarrantyDashboard: React.FC = () => {
           setShowReviewPendingOnly(true);
           setShowTodayDueOnly(false);
           setShowFirstFollowupsOnly(false);
+          setShowCompletedOnly(false);
         }}
         onTotalClick={() => {
           // Clear all ad-hoc filters and show full dataset under current brand/date
           setShowReviewPendingOnly(false);
           setShowTodayDueOnly(false);
           setShowFirstFollowupsOnly(false);
+          setShowCompletedOnly(false);
           setActiveWarrantyFilter("");
           setSearchId("");
         }}
@@ -400,15 +422,24 @@ const WarrantyDashboard: React.FC = () => {
           setShowReviewPendingOnly(false);
           setShowTodayDueOnly(false);
           setShowFirstFollowupsOnly(false);
+          setShowCompletedOnly(false);
         }}
         onTodayDueClick={handleTodaysFollowupsClick}
         onFirstFollowupClick={handleFirstFollowupClick}
+        onReviewsWonClick={() => {
+          setActiveWarrantyFilter("");
+          setSearchId("");
+          setShowReviewPendingOnly(false);
+          setShowTodayDueOnly(false);
+          setShowFirstFollowupsOnly(false);
+          setShowCompletedOnly(true);
+        }}
       />
 
       <CustomerTable
-        customers={showFirstFollowupsOnly ? firstFollowupsData : showTodayDueOnly ? todaysFollowupsData : (todayDueFilteredCustomers as any).filter((c: any) => (
-          showReviewPendingOnly ? (Boolean(c.WarrantyCardSent) && !c.FeedbackReceived) : true
-        ))}
+        customers={showFirstFollowupsOnly ? firstFollowupsData : showTodayDueOnly ? todaysFollowupsData : (todayDueFilteredCustomers as any)
+          .filter((c: any) => (showReviewPendingOnly ? (Boolean(c.WarrantyCardSent) && !c.FeedbackReceived) : true))
+          .filter((c: any) => (showCompletedOnly ? Boolean(c.FeedbackReceived) : true))}
         onCustomerClick={(c) => {
           const raw = data.find((w) => w.id === c.id || w.warrantyId === (c as any).WarrantyID);
           if (!raw) return;
@@ -422,6 +453,7 @@ const WarrantyDashboard: React.FC = () => {
             phone: (raw as any).phone ?? (raw as any).Mobile ?? "",
             orderId: (raw as any).orderId ?? (raw as any).OrderId ?? "",
             product: (raw as any).product ?? (raw as any).Product ?? "",
+            sku: (raw as any).sku ?? (raw as any).SKU ?? '',
             purchasedFrom: (raw as any).purchasedFrom ?? (raw as any).PurchasedFrom ?? "",
             status: (raw as any).status ?? (raw as any).Status ?? "",
             lastRemark: (raw as any).lastRemark ?? (raw as any).LastRemark ?? "",

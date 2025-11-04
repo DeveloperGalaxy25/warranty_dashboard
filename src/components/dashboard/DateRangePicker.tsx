@@ -112,14 +112,14 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   };
 
   const handleCustomRangeSelect = (range: { from?: Date; to?: Date } | undefined) => {
-    if (range?.from && range?.to) {
-      const normalized = { from: startOfDay(range.from), to: endOfDay(range.to) };
-      setCustomRange(normalized);
-      onChange(normalized as { from: Date; to: Date });
-      setExplicitCustomSelection(false); // Reset custom selection after actual selection
-      setIsOpen(false);
+    // Do not call onChange here; only stage selection locally
+    if (range?.from || range?.to) {
+      setCustomRange({
+        from: range.from ? startOfDay(range.from) : undefined,
+        to: range.to ? endOfDay(range.to) : undefined,
+      });
     } else {
-      setCustomRange(range || {});
+      setCustomRange({});
     }
   };
 
@@ -182,6 +182,23 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
                 numberOfMonths={1}
                 className={cn("p-3 pointer-events-auto")}
               />
+              <div className="flex justify-end gap-2 px-3 pb-3">
+                <Button variant="outline" size="sm" onClick={() => setIsOpen(false)}>Cancel</Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (customRange.from && customRange.to) {
+                      const normalized = { from: startOfDay(customRange.from), to: endOfDay(customRange.to) };
+                      onChange(normalized as { from: Date; to: Date });
+                      setExplicitCustomSelection(false);
+                      setIsOpen(false);
+                    }
+                  }}
+                  disabled={!customRange.from || !customRange.to}
+                >
+                  Apply
+                </Button>
+              </div>
             </div>
           )}
         </div>

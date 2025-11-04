@@ -11,10 +11,11 @@ interface KPICardsProps {
   onTodayDueClick?: () => void;
   onFirstFollowupClick?: () => void;
   onRegistrationsTodayClick?: () => void;
+  onReviewsWonClick?: () => void;
   resetSignal?: number;
 }
 
-export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onTodayDueClick, onFirstFollowupClick, onRegistrationsTodayClick, resetSignal }: KPICardsProps) => {
+export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onTodayDueClick, onFirstFollowupClick, onRegistrationsTodayClick, onReviewsWonClick, resetSignal }: KPICardsProps) => {
   const [firstFollowupKpi, setFirstFollowupKpi] = useState<{ count: number; asOf: string } | null>(null);
   const [todaysFollowupsKpi, setTodaysFollowupsKpi] = useState<{ count: number; asOf: string } | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -32,6 +33,9 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
   const stillReviewPending = customers.filter(
     customer => Boolean(customer.WarrantyCardSent) && !customer.FeedbackReceived
   ).length;
+
+  // Reviews Won (feedback received)
+  const reviewsWon = customers.filter(customer => Boolean(customer.FeedbackReceived)).length;
 
   // Calculate today's follow-ups due
   const todayDueCount = customers.filter(customer => {
@@ -110,6 +114,14 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
       clickable: true as const,
     },
     {
+      title: "Reviews Won",
+      value: reviewsWon,
+      description: "feedback received",
+      trend: reviewsWon > 0 ? "growing" : "-",
+      className: "bg-gradient-to-br from-emerald-50 to-emerald-100 hover:shadow-lg border-emerald-200",
+      clickable: true as const,
+    },
+    {
       title: "Today's Follow-ups Due",
       value: todaysFollowupsKpi?.count || 0,
       description: todaysFollowupsKpi?.asOf ? `as of ${new Date(todaysFollowupsKpi.asOf).toLocaleString()}` : "due today",
@@ -128,7 +140,7 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
       {kpis.map((kpi, index) => {
         const valueClass = kpi.title === "Still Review Pending"
           ? (kpi.value > 0 ? "text-amber-600 font-extrabold" : "text-muted-foreground")
@@ -150,6 +162,7 @@ export const KPICards = ({ customers, onReviewPendingClick, onTotalClick, onToda
               if (kpi.title === "Today's Follow-ups Due" && onTodayDueClick) onTodayDueClick();
               if (kpi.title === "1st Follow-ups" && onFirstFollowupClick) onFirstFollowupClick();
               if (kpi.title === "Registrations Today" && onRegistrationsTodayClick) onRegistrationsTodayClick();
+              if (kpi.title === "Reviews Won" && onReviewsWonClick) onReviewsWonClick();
             }}
           >
             <CardContent className="p-6">

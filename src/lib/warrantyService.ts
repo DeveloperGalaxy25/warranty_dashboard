@@ -46,6 +46,28 @@ export const getWarranties = async (filters?: {
   return json.data as any[];
 };
 
+// Update SKU name for a warranty
+export const updateSku = async (
+  warrantyId: string,
+  skuName: string
+): Promise<{ success: boolean }> => {
+  const body = new URLSearchParams();
+  body.append("token", getToken());
+  body.append("action", "updateSku");
+  body.append("warrantyId", warrantyId);
+  body.append("sku", skuName || "");
+
+  const res = await fetch(getBase(), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body,
+  });
+  if (!res.ok) throw new Error(`Failed to update SKU: ${res.status}`);
+  const json = await safeJsonParse(res);
+  if (!json?.success) throw new Error(json?.error || "Unknown API error");
+  return { success: true };
+};
+
 export const updateWarrantyStatus = async (
   warrantyId: string,
   updates: { status?: string; lastRemark?: string; nextFollowUp?: string; assignedAgent?: string },

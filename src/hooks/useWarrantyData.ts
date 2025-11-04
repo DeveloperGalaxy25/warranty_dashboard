@@ -11,6 +11,7 @@ export interface WarrantyRecord {
   phone: string;
   orderId: string;
   product: string;
+  sku?: string;
   purchasedFrom: string;
   status: string;
   lastRemark: string;

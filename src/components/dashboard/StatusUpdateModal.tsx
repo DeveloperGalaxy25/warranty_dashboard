@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Check, Clock, User, Loader2, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { WarrantyRecord } from "@/hooks/useWarrantyData";
-import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus, markFollowUp, getFollowupState } from "@/lib/warrantyService";
+import { markReviewDone, logFollowUpAction, getWorkflowHistory, updateFollowUpStatus, markFollowUp, getFollowupState, updateSku } from "@/lib/warrantyService";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -73,6 +73,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [followUpHistory, setFollowUpHistory] = useState<FollowUpHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [sku, setSku] = useState<string>(customer?.sku || (customer as any)?.SKU || "");
   const { toast } = useToast();
 
   const isReviewCompleted = Boolean(customer?.status === "Review Won" || customer?.status === "Closed" || customer?.status === "Completed");
@@ -86,6 +87,7 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
       setFollowUpSummary((prev) => prev || { count: 0, stages: [], latest: null, nextDue: null });
       // Reset success state when modal opens
       setSaveSuccess(false);
+      setSku((customer as any)?.sku || (customer as any)?.SKU || "");
     }
   }, [isOpen, customer]);
 
@@ -127,6 +129,19 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
       setFollowUpHistory([]);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const handleSaveSku = async () => {
+    try {
+      setLoading(true);
+      await updateSku(customer.warrantyId, sku || "");
+      toast({ title: "SKU Saved", description: "SKU updated successfully", duration: 2500 });
+      onUpdate();
+    } catch (e) {
+      toast({ title: "SKU Update Failed", description: `${e instanceof Error ? e.message : 'Unknown error'}`, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -322,6 +337,23 @@ export const StatusUpdateModal = ({ customer, isOpen, onClose, onUpdate, onFollo
         </div>
 
         <div className="space-y-6 mt-4">
+          {/* SKU Entry */}
+          <div className="space-y-2 p-4 border rounded-lg">
+            <Label htmlFor="skuName" className="text-sm font-medium">SKU</Label>
+            <div className="flex gap-2">
+              <input
+                id="skuName"
+                className="w-full border rounded px-3 py-2 text-sm"
+                placeholder="Enter SKU name"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+              />
+              <Button onClick={handleSaveSku} disabled={loading}>
+                Save SKU
+              </Button>
+            </div>
+          </div>
+
           {/* Review Done Section */}
           <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
             <h3 className="text-lg font-medium">Review Status</h3>

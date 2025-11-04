@@ -35,13 +35,15 @@ const COLUMN_DEFS = [
   { id: 'customer',          label: 'Customer',               default: true, sortable: true },
   { id: 'contact',           label: 'Contact',                default: true, sortable: false },
   { id: 'product',           label: 'Product',                default: true, sortable: false },
+  { id: 'sku',               label: 'SKU',                    default: true, sortable: false },
   { id: 'purchasedFrom',     label: 'Purchased From',         default: true, sortable: true },
+  // Place Follow-ups Done before Follow-Up Status
+  { id: 'followUpsDone',     label: 'Follow-ups Done',        default: true, sortable: true },
+  { id: 'followUpStatus',    label: 'Follow-Up Status',       default: true, sortable: true },
   { id: 'warrantyCardSent',  label: 'Warranty Card Sent',     default: true, sortable: true },
   { id: 'feedbackReceived',  label: 'Feedback Received',      default: true, sortable: true },
   { id: 'extendedSent',      label: 'Extended Warranty Sent', default: true, sortable: true },
-  { id: 'nry24',             label: '24h NRY',                default: false, sortable: true },
-  { id: 'followUpStatus',    label: 'Follow-Up Status',       default: true, sortable: true },
-  { id: 'followUpsDone',     label: 'Follow-ups Done',        default: true, sortable: true }
+  { id: 'nry24',             label: '24h NRY',                default: false, sortable: true }
 ];
 
 // Column filter interface
@@ -223,15 +225,15 @@ const FollowUpsDoneCell = ({
 }) => {
   if (loading) {
     return (
-      <td className="px-4 py-3 text-sm text-muted-foreground">
-        <div className="animate-pulse bg-muted h-4 w-8 rounded"></div>
+      <td className="px-4 py-3 text-sm text-muted-foreground text-center">
+        <div className="animate-pulse bg-muted h-4 w-8 rounded mx-auto"></div>
       </td>
     );
   }
 
   if (customer.FeedbackReceived) {
     return (
-      <td className="px-4 py-3 text-sm font-medium text-green-600">
+      <td className="px-4 py-3 text-sm font-medium text-green-600 text-center">
         Completed
       </td>
     );
@@ -240,7 +242,7 @@ const FollowUpsDoneCell = ({
   // Use the followupsDone field from backend response
   if (customer.FollowupsDone !== undefined) {
     return (
-      <td className="px-4 py-3 text-sm text-foreground">
+      <td className="px-4 py-3 text-sm text-foreground text-center">
         {customer.FollowupsDone} of 3
       </td>
     );
@@ -249,14 +251,14 @@ const FollowUpsDoneCell = ({
   // Fallback to summary if followupsDone is not available
   if (summary) {
     return (
-      <td className="px-4 py-3 text-sm text-foreground">
+      <td className="px-4 py-3 text-sm text-foreground text-center">
         {summary.count} of 3
       </td>
     );
   }
 
   return (
-    <td className="px-4 py-3 text-sm text-muted-foreground">
+    <td className="px-4 py-3 text-sm text-muted-foreground text-center">
       -
     </td>
   );
@@ -484,6 +486,47 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
   const endIndex = Math.min(startIndex + PAGE_SIZE, totalItems);
   const pageItems = sortedCustomers.slice(startIndex, endIndex);
 
+  // Map column id to exportable value for a customer
+  const getExportValue = (customer: Customer, columnId: string): string | number => {
+    switch (columnId) {
+      case 'warrantyId': return customer.WarrantyID;
+      case 'timestamp': return customer.Timestamp ? new Date(customer.Timestamp).toLocaleString() : '';
+      case 'brand': return customer.Brand;
+      case 'customer': return customer.CustomerName;
+      case 'contact': return `${customer.Email || ''}${customer.Email ? ' | ' : ''}${customer.Mobile || ''}`;
+      case 'product': return customer.Product || '';
+      case 'sku': return customer.SKU || '';
+      case 'purchasedFrom': return customer.PurchasedFrom || '';
+      case 'warrantyCardSent': return ((): string => {
+        const v: any = customer.WarrantyCardSent;
+        const asString = typeof v === 'string' ? v.trim() : '';
+        const isTrue = v === true || asString.toUpperCase() === 'TRUE' || asString.includes('✅') || asString.includes('✔');
+        return isTrue ? 'Yes' : 'No';
+      })();
+      case 'feedbackReceived': return customer.FeedbackReceived ? 'Yes' : 'No';
+      case 'extendedSent': return customer.ExtendedWarrantySent ? 'Yes' : 'No';
+      case 'nry24': return customer.NRY24 || '';
+      case 'followUpStatus': return customer.FeedbackReceived ? 'Completed' : (customer.FollowUpStatus || 'Pending');
+      case 'followUpsDone': return customer.FeedbackReceived ? 'Completed' : `${customer.FollowupsDone ?? ''}`;
+      default: return '';
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    const XLSX = await import('xlsx');
+    const orderedColumns = columnPrefs.order;
+    const headers = orderedColumns.map(id => {
+      const def = COLUMN_DEFS.find(c => c.id === id);
+      return def ? def.label : id;
+    });
+    const rows = sortedCustomers.map(c => orderedColumns.map(colId => getExportValue(c, colId)));
+    const aoa = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+    XLSX.writeFile(wb, 'customer_registrations.xlsx');
+  };
+
   const SortButton = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <Button
       variant="ghost"
@@ -556,13 +599,17 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         return (
           <td className="px-4 py-3 text-sm text-foreground">{customer.Product}</td>
         );
+      case 'sku':
+        return (
+          <td className="px-4 py-3 text-sm text-foreground text-center">{customer.SKU || '-'}</td>
+        );
       case 'purchasedFrom':
         return (
-          <td className="px-4 py-3 text-sm text-foreground">{customer.PurchasedFrom || '-'}</td>
+          <td className="px-4 py-3 text-sm text-foreground text-center">{customer.PurchasedFrom || '-'}</td>
         );
       case 'warrantyCardSent':
         return (
-          <td className="px-4 py-3 text-sm text-foreground">
+          <td className="px-4 py-3 text-sm text-foreground text-center">
             {(() => {
               const v: any = customer.WarrantyCardSent;
               const asString = typeof v === 'string' ? v.trim() : '';
@@ -577,7 +624,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         );
       case 'feedbackReceived':
         return (
-          <td className="px-4 py-3 text-sm text-foreground">
+          <td className="px-4 py-3 text-sm text-foreground text-center">
             {customer.FeedbackReceived ? (
               <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
             ) : (
@@ -587,7 +634,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         );
       case 'extendedSent':
         return (
-          <td className="px-4 py-3 text-sm text-foreground">
+          <td className="px-4 py-3 text-sm text-foreground text-center">
             {customer.ExtendedWarrantySent ? (
               <span className="text-emerald-600" role="img" aria-label="yes">✅</span>
             ) : (
@@ -597,7 +644,7 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         );
       case 'nry24':
         return (
-          <td className="px-4 py-3 text-sm text-foreground">
+          <td className="px-4 py-3 text-sm text-foreground text-center">
             {customer.NRY24 ? (
               <Badge className={customer.NRY24 === 'YES' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
                 {customer.NRY24}
@@ -609,8 +656,8 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
         );
       case 'followUpStatus':
         return (
-          <td className="px-4 py-3">
-            <FollowUpStatusBadge status={customer.FollowUpStatus || 'Pending'} />
+          <td className="px-4 py-3 text-center">
+            <FollowUpStatusBadge status={customer.FeedbackReceived ? 'Completed' : (customer.FollowUpStatus || 'Pending')} />
             <DueTodayBadge 
               nextFollowUp={summaries[customer.WarrantyID]?.nextDue} 
               feedbackReceived={customer.FeedbackReceived} 
@@ -635,6 +682,11 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
     const colDef = COLUMN_DEFS.find(col => col.id === columnId);
     if (!colDef) return null;
 
+    // Columns after SKU should be center-aligned
+    const centerAlignedColumns = ['purchasedFrom', 'followUpsDone', 'followUpStatus', 'warrantyCardSent', 'feedbackReceived', 'extendedSent', 'nry24'];
+    const isCenterAligned = centerAlignedColumns.includes(columnId);
+    const textAlignClass = isCenterAligned ? 'text-center' : 'text-left';
+
     if (colDef.sortable) {
       const sortFieldMap: Record<string, SortField> = {
         'timestamp': 'Timestamp',
@@ -650,14 +702,14 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
       };
       
       return (
-        <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">
+        <th className={`px-4 py-3 ${textAlignClass} text-sm font-semibold text-foreground`}>
           <SortButton field={sortFieldMap[columnId] as SortField}>{colDef.label}</SortButton>
         </th>
       );
     }
 
     return (
-      <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">
+      <th className={`px-4 py-3 ${textAlignClass} text-sm font-semibold text-foreground`}>
         {colDef.label}
       </th>
     );
@@ -670,6 +722,15 @@ export const CustomerTable = ({ customers, onCustomerClick }: CustomerTableProps
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-bold text-foreground">Customer Registrations</CardTitle>
             <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleDownloadExcel}
+                className="flex items-center gap-2"
+                title="Download filtered data as Excel"
+              >
+                Download Excel
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

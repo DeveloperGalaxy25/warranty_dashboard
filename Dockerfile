@@ -1,8 +1,8 @@
 FROM node:20 AS builder
 WORKDIR /app
 COPY package*.json ./
-# Allow peer dependency conflicts during CI installs
-RUN npm ci --legacy-peer-deps
+# Allow peer dependency conflicts and install from package.json
+RUN npm install --legacy-peer-deps
 # Copy the rest of the app (includes .env.production)
 COPY . .
 # Build-time vars for Vite
